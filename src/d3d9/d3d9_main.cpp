@@ -16,6 +16,7 @@ namespace dxvk {
   void InitializeLogging() {
     dxvk::Logger::info("如果你的程序闪退且日志文件没后续内容, 那可能是没有Vulkan 1.3 驱动 请更新显卡驱动到最新");
     dxvk::Logger::info("常见解决方案：如果你的CPU是AMD的 有可能是核显驱动有问题 请重新打一下AMD显卡驱动即可解决!");
+	dxvk::Logger::info("需要更多帮助与更新可以访问：https://www.yuque.com/mengyu-g80lv/fpcx1y");
   }
 
   // 静态初始化器结构体
