@@ -117,6 +117,7 @@ namespace dxvk::hud {
     std::vector<Rc<HudItem>>                      m_items;
 
     static void parseOption(const std::string& str, float& value);
+
   };
 
 

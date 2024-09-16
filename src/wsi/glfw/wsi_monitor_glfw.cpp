@@ -1,5 +1,3 @@
-#if defined(DXVK_WSI_GLFW)
-
 #include "../wsi_monitor.h"
 
 #include "wsi/native_wsi.h"
@@ -13,22 +11,22 @@
 
 namespace dxvk::wsi {
 
-  HMONITOR GlfwWsiDriver::getDefaultMonitor() {
+  HMONITOR getDefaultMonitor() {
     return enumMonitors(0);
   }
 
 
-  HMONITOR GlfwWsiDriver::enumMonitors(uint32_t index) {
+  HMONITOR enumMonitors(uint32_t index) {
     return isDisplayValid(int32_t(index))
          ? toHmonitor(index)
          : nullptr;
   }
 
-  HMONITOR GlfwWsiDriver::enumMonitors(const LUID *adapterLUID[], uint32_t numLUIDs, uint32_t index) {
+  HMONITOR enumMonitors(const LUID *adapterLUID[], uint32_t numLUIDs, uint32_t index) {
     return enumMonitors(index);
   }
 
-  bool GlfwWsiDriver::getDisplayName(
+  bool getDisplayName(
       HMONITOR hMonitor,
       WCHAR            (&Name)[32]) {
     const int32_t displayId = fromHmonitor(hMonitor);
@@ -48,7 +46,7 @@ namespace dxvk::wsi {
   }
 
 
-  bool GlfwWsiDriver::getDesktopCoordinates(
+  bool getDesktopCoordinates(
       HMONITOR hMonitor,
       RECT* pRect) {
     const int32_t displayId = fromHmonitor(hMonitor);
@@ -99,7 +97,7 @@ namespace dxvk::wsi {
   }
 
 
-  bool GlfwWsiDriver::getDisplayMode(
+  bool getDisplayMode(
       HMONITOR hMonitor,
       uint32_t ModeNumber,
       WsiMode* pMode) {
@@ -123,7 +121,7 @@ namespace dxvk::wsi {
   }
 
 
-  bool GlfwWsiDriver::getCurrentDisplayMode(
+  bool getCurrentDisplayMode(
       HMONITOR hMonitor,
       WsiMode* pMode) {
     const int32_t displayId = fromHmonitor(hMonitor);
@@ -143,7 +141,7 @@ namespace dxvk::wsi {
   }
 
 
-  bool GlfwWsiDriver::getDesktopDisplayMode(
+  bool getDesktopDisplayMode(
       HMONITOR hMonitor,
       WsiMode* pMode) {
     const int32_t displayId = fromHmonitor(hMonitor);
@@ -161,11 +159,9 @@ namespace dxvk::wsi {
     return true;
   }
 
-  std::vector<uint8_t> GlfwWsiDriver::getMonitorEdid(HMONITOR hMonitor) {
+  std::vector<uint8_t> getMonitorEdid(HMONITOR hMonitor) {
     Logger::err("getMonitorEdid not implemented on this platform.");
     return {};
   }
 
 }
-
-#endif

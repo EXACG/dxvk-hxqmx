@@ -24,9 +24,7 @@ namespace dxvk::hud {
     std::string::size_type pos = 0;
     std::string::size_type end = 0;
     std::string::size_type mid = 0;
-	
-	//m_enabled.insert("version");
-	
+    
     while (pos < configStr.size()) {
       end = configStr.find(',', pos);
       mid = configStr.find('=', pos);
@@ -131,8 +129,12 @@ namespace dxvk::hud {
 
     std::string driverInfo = props.vk12.driverInfo;
 
-    if (driverInfo.empty())
-      driverInfo = props.driverVersion.toString();
+    if (driverInfo.empty()) {
+      driverInfo = str::format(
+        VK_VERSION_MAJOR(props.core.properties.driverVersion), ".",
+        VK_VERSION_MINOR(props.core.properties.driverVersion), ".",
+        VK_VERSION_PATCH(props.core.properties.driverVersion));
+    }
 
     m_deviceName = props.core.properties.deviceName;
     m_driverName = str::format("Driver:  ", props.vk12.driverName);

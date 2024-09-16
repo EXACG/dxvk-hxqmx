@@ -81,7 +81,7 @@ namespace dxvk {
       D3D9Memory             (D3D9Memory&& other);
       D3D9Memory& operator = (D3D9Memory&& other);
 
-      explicit operator bool() const { return m_chunk != nullptr; }
+      operator bool() const { return m_chunk != nullptr; }
 
       void Map();
       void Unmap();
@@ -139,7 +139,7 @@ namespace dxvk {
       D3D9Memory             (D3D9Memory&& other);
       D3D9Memory& operator = (D3D9Memory&& other);
 
-      explicit operator bool() const { return m_ptr != nullptr; }
+      operator bool() const { return m_ptr != nullptr; }
 
       void Map() {}
       void Unmap() {}

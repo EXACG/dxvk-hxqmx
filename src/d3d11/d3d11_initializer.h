@@ -71,8 +71,6 @@ namespace dxvk {
     void FlushImplicit();
     void FlushInternal();
 
-    void SyncKeyedMutex(ID3D11Resource *pResource);
-
   };
 
 }

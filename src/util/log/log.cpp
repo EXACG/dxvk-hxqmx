@@ -77,14 +77,10 @@ namespace dxvk {
         std::string adjusted = outstream.str();
 
         if (!adjusted.empty()) {
-#ifdef _WIN32
           if (m_wineLogOutput)
             m_wineLogOutput(adjusted.c_str());
           else
             std::cerr << adjusted;
-#else
-          std::cerr << adjusted;
-#endif
         }
 
         if (m_fileStream)
@@ -100,11 +96,9 @@ namespace dxvk {
     if (path == "none")
       return std::string();
 
-#ifdef _WIN32
     // Don't create a log file if we're writing to wine's console output
     if (path.empty() && m_wineLogOutput)
       return std::string();
-#endif
 
     if (!path.empty() && *path.rbegin() != '/')
       path += '/';

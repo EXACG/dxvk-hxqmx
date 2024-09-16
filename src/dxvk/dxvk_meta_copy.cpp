@@ -9,6 +9,9 @@
 #include <dxvk_copy_color_1d.h>
 #include <dxvk_copy_color_2d.h>
 #include <dxvk_copy_color_ms.h>
+#include <dxvk_copy_depth_1d.h>
+#include <dxvk_copy_depth_2d.h>
+#include <dxvk_copy_depth_ms.h>
 #include <dxvk_copy_depth_stencil_1d.h>
 #include <dxvk_copy_depth_stencil_2d.h>
 #include <dxvk_copy_depth_stencil_ms.h>
@@ -81,7 +84,11 @@ namespace dxvk {
     m_color {
       createShaderModule(dxvk_copy_color_1d),
       createShaderModule(dxvk_copy_color_2d),
-      createShaderModule(dxvk_copy_color_ms) } {
+      createShaderModule(dxvk_copy_color_ms) },
+    m_depth {
+      createShaderModule(dxvk_copy_depth_1d),
+      createShaderModule(dxvk_copy_depth_2d),
+      createShaderModule(dxvk_copy_depth_ms) } {
     if (device->features().vk12.shaderOutputLayer) {
       m_shaderVert = createShaderModule(dxvk_fullscreen_layer_vert);
     } else {
@@ -112,6 +119,9 @@ namespace dxvk {
     m_vkd->vkDestroyShaderModule(m_vkd->device(), m_depthStencil.fragMs, nullptr);
     m_vkd->vkDestroyShaderModule(m_vkd->device(), m_depthStencil.frag2D, nullptr);
     m_vkd->vkDestroyShaderModule(m_vkd->device(), m_depthStencil.frag1D, nullptr);
+    m_vkd->vkDestroyShaderModule(m_vkd->device(), m_depth.fragMs, nullptr);
+    m_vkd->vkDestroyShaderModule(m_vkd->device(), m_depth.frag2D, nullptr);
+    m_vkd->vkDestroyShaderModule(m_vkd->device(), m_depth.frag1D, nullptr);
     m_vkd->vkDestroyShaderModule(m_vkd->device(), m_color.fragMs, nullptr);
     m_vkd->vkDestroyShaderModule(m_vkd->device(), m_color.frag2D, nullptr);
     m_vkd->vkDestroyShaderModule(m_vkd->device(), m_color.frag1D, nullptr);
@@ -120,29 +130,32 @@ namespace dxvk {
   }
 
 
-  DxvkMetaCopyFormats DxvkMetaCopyObjects::getFormats(
-          VkFormat              dstFormat,
+  VkFormat DxvkMetaCopyObjects::getCopyDestinationFormat(
           VkImageAspectFlags    dstAspect,
-          VkFormat              srcFormat,
-          VkImageAspectFlags    srcAspect) const {
-    if (dstAspect == srcAspect)
-      return { dstFormat, srcFormat };
-
-    if (dstAspect == VK_IMAGE_ASPECT_COLOR_BIT && srcAspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
+          VkImageAspectFlags    srcAspect,
+          VkFormat              srcFormat) const {
+    if (srcAspect == dstAspect)
+      return srcFormat;
+    
+    if (dstAspect == VK_IMAGE_ASPECT_COLOR_BIT
+     && srcAspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
       switch (srcFormat) {
-        case VK_FORMAT_D16_UNORM:  return { VK_FORMAT_R16_UNORM,  VK_FORMAT_D16_UNORM  };
-        case VK_FORMAT_D32_SFLOAT: return { VK_FORMAT_R32_SFLOAT, VK_FORMAT_D32_SFLOAT };
-        default:                   return { VK_FORMAT_UNDEFINED,  VK_FORMAT_UNDEFINED  };
-      }
-    } else if (dstAspect == VK_IMAGE_ASPECT_DEPTH_BIT && srcAspect == VK_IMAGE_ASPECT_COLOR_BIT) {
-      switch (dstFormat) {
-        case VK_FORMAT_D16_UNORM:  return { VK_FORMAT_D16_UNORM,  VK_FORMAT_R16_UNORM  };
-        case VK_FORMAT_D32_SFLOAT: return { VK_FORMAT_D32_SFLOAT, VK_FORMAT_R32_SFLOAT };
-        default:                   return { VK_FORMAT_UNDEFINED,  VK_FORMAT_UNDEFINED  };
+        case VK_FORMAT_D16_UNORM:  return VK_FORMAT_R16_UNORM;
+        case VK_FORMAT_D32_SFLOAT: return VK_FORMAT_R32_SFLOAT;
+        default:                   return VK_FORMAT_UNDEFINED;
       }
     }
 
-    return { VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED };
+    if (dstAspect == VK_IMAGE_ASPECT_DEPTH_BIT
+     && srcAspect == VK_IMAGE_ASPECT_COLOR_BIT) {
+      switch (srcFormat) {
+        case VK_FORMAT_R16_UNORM:  return VK_FORMAT_D16_UNORM;
+        case VK_FORMAT_R32_SFLOAT: return VK_FORMAT_D32_SFLOAT;
+        default:                   return VK_FORMAT_UNDEFINED;
+      }
+    }
+
+    return VK_FORMAT_UNDEFINED;
   }
 
 
@@ -300,7 +313,7 @@ namespace dxvk {
     
     std::array<std::pair<const FragShaders*, VkImageAspectFlags>, 3> shaderSets = {{
       { &m_color,        VK_IMAGE_ASPECT_COLOR_BIT },
-      { &m_color,        VK_IMAGE_ASPECT_DEPTH_BIT },
+      { &m_depth,        VK_IMAGE_ASPECT_DEPTH_BIT },
       { &m_depthStencil, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT },
     }};
 

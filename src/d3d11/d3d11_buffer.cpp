@@ -12,7 +12,7 @@ namespace dxvk {
     const D3D11_ON_12_RESOURCE_INFO*  p11on12Info)
   : D3D11DeviceChild<ID3D11Buffer>(pDevice),
     m_desc        (*pDesc),
-    m_resource    (this, pDevice),
+    m_resource    (this),
     m_d3d10       (this) {
     DxvkBufferCreateInfo info;
     info.flags  = 0;
@@ -339,7 +339,6 @@ namespace dxvk {
                   || (m_parent->GetOptions()->cachedDynamicResources & m_desc.BindFlags);
 
     if ((memoryFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) && useCached) {
-      memoryFlags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
       memoryFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
                   |  VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
     }

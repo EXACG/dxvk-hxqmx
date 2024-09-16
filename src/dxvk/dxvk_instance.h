@@ -21,21 +21,6 @@ namespace dxvk {
 
 
   /**
-   * \brief Instance creation flags
-   *
-   * These flags will be passed to the app version field of the Vulkan
-   * instance, so that drivers can adjust behaviour for some edge cases
-   * that are not implementable with Vulkan itself.
-   */
-  enum class DxvkInstanceFlag : uint32_t {
-    /** Enforce D3D9 behaviour for texture coordinate snapping */
-    ClientApiIsD3D9,
-  };
-
-  using DxvkInstanceFlags = Flags<DxvkInstanceFlag>;
-
-
-  /**
    * \brief DXVK instance
    * 
    * Manages a Vulkan instance and stores a list
@@ -48,17 +33,14 @@ namespace dxvk {
 
     /**
      * \brief Creates new Vulkan instance
-     * \param [in] flags Instance flags
      */
-    explicit DxvkInstance(DxvkInstanceFlags flags);
+    DxvkInstance();
 
     /**
      * \brief Imports existing Vulkan instance
-     * \param [in] flags Instance flags
      */
     explicit DxvkInstance(
-      const DxvkInstanceImportInfo& args,
-            DxvkInstanceFlags       flags);
+      const DxvkInstanceImportInfo& args);
 
     ~DxvkInstance();
     
@@ -163,8 +145,7 @@ namespace dxvk {
       const DxvkInstanceImportInfo& args);
 
     void createInstanceLoader(
-      const DxvkInstanceImportInfo& args,
-            DxvkInstanceFlags       flags);
+      const DxvkInstanceImportInfo& args);
 
     std::vector<DxvkExt*> getExtensionList(
             DxvkInstanceExtensions& ext,

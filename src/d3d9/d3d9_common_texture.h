@@ -179,14 +179,11 @@ namespace dxvk {
      * Fills in undefined values and validates the texture
      * parameters. Any error returned by this method should
      * be forwarded to the application.
-     * \param [in] pDevice D3D9 device
-     * \param [in] ResourceType Resource type
      * \param [in,out] pDesc Texture description
      * \returns \c S_OK if the parameters are valid
      */
     static HRESULT NormalizeTextureProperties(
             D3D9DeviceEx*              pDevice,
-            D3DRESOURCETYPE            ResourceType,
             D3D9_COMMON_TEXTURE_DESC*  pDesc);
 
     /**
@@ -310,8 +307,8 @@ namespace dxvk {
       return util::computeMipLevelExtent(GetExtent(), MipLevel);
     }
 
-    bool MarkTransitionedToHazardLayout() {
-      return std::exchange(m_transitionedToHazardLayout, true);
+    bool MarkHazardous() {
+      return std::exchange(m_hazardous, true);
     }
 
     D3DRESOURCETYPE GetType() {
@@ -343,7 +340,7 @@ namespace dxvk {
     }
 
     VkImageLayout DetermineRenderTargetLayout(VkImageLayout hazardLayout) const {
-      if (unlikely(m_transitionedToHazardLayout))
+      if (unlikely(m_hazardous))
         return hazardLayout;
 
       return m_image != nullptr &&
@@ -353,16 +350,18 @@ namespace dxvk {
     }
 
     VkImageLayout DetermineDepthStencilLayout(bool write, bool hazardous, VkImageLayout hazardLayout) const {
-      if (unlikely(m_transitionedToHazardLayout))
-        return hazardLayout;
+      VkImageLayout layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+      if (unlikely(hazardous)) {
+        layout = write
+          ? hazardLayout
+          : VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
+      }
 
       if (unlikely(m_image->info().tiling != VK_IMAGE_TILING_OPTIMAL))
-        return VK_IMAGE_LAYOUT_GENERAL;
+        layout = VK_IMAGE_LAYOUT_GENERAL;
 
-      if (unlikely(hazardous && !write))
-        return VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
-
-      return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      return layout;
     }
 
     Rc<DxvkImageView> CreateView(
@@ -513,7 +512,7 @@ namespace dxvk {
 
     int64_t                       m_size = 0;
 
-    bool                          m_transitionedToHazardLayout = false;
+    bool                          m_hazardous = false;
 
     D3D9ColorView                 m_sampleView;
 

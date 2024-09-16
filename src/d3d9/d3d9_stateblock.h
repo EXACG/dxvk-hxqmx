@@ -89,8 +89,6 @@ namespace dxvk {
 
     D3D9StateBlock(D3D9DeviceEx* pDevice, D3D9StateBlockType Type);
 
-    ~D3D9StateBlock();
-
     HRESULT STDMETHODCALLTYPE QueryInterface(
         REFIID  riid,
         void** ppvObject) final;
@@ -113,11 +111,6 @@ namespace dxvk {
             UINT               StreamNumber,
             D3D9VertexBuffer*  pStreamData,
             UINT               OffsetInBytes,
-            UINT               Stride);
-
-    HRESULT SetStreamSourceWithoutOffset(
-            UINT               StreamNumber,
-            D3D9VertexBuffer*  pStreamData,
             UINT               Stride);
 
     HRESULT SetStreamSourceFreq(UINT StreamNumber, UINT Setting);
@@ -186,7 +179,7 @@ namespace dxvk {
       Capture
     };
 
-    template <typename Dst, typename Src, bool IgnoreStreamOffset>
+    template <typename Dst, typename Src>
     void ApplyOrCapture(Dst* dst, const Src* src) {
       if (m_captures.flags.test(D3D9CapturedStateFlag::StreamFreq)) {
         for (uint32_t idx : bit::BitMask(m_captures.streamFreq.dword(0)))
@@ -216,19 +209,11 @@ namespace dxvk {
       if (m_captures.flags.test(D3D9CapturedStateFlag::VertexBuffers)) {
         for (uint32_t idx : bit::BitMask(m_captures.vertexBuffers.dword(0))) {
           const auto& vbo = src->vertexBuffers[idx];
-          if constexpr (!IgnoreStreamOffset) {
-            dst->SetStreamSource(
-              idx,
-              vbo.vertexBuffer.ptr(),
-              vbo.offset,
-              vbo.stride);
-          } else {
-            // For whatever reason, D3D9 doesn't capture the stream offset
-            dst->SetStreamSourceWithoutOffset(
-              idx,
-              vbo.vertexBuffer.ptr(),
-              vbo.stride);
-          }
+          dst->SetStreamSource(
+            idx,
+            vbo.vertexBuffer.ptr(),
+            vbo.offset,
+            vbo.stride);
         }
       }
 
@@ -337,12 +322,12 @@ namespace dxvk {
       }
     }
 
-    template <D3D9StateFunction Func, bool IgnoreStreamOffset>
+    template <D3D9StateFunction Func>
     void ApplyOrCapture() {
       if      constexpr (Func == D3D9StateFunction::Apply)
-        ApplyOrCapture<D3D9DeviceEx, D3D9CapturableState, IgnoreStreamOffset>(m_parent, &m_state);
+        ApplyOrCapture(m_parent, &m_state);
       else if constexpr (Func == D3D9StateFunction::Capture)
-        ApplyOrCapture<D3D9StateBlock, D3D9DeviceState, IgnoreStreamOffset>(this, m_deviceState);
+        ApplyOrCapture(this, m_deviceState);
     }
 
     template <

@@ -15,7 +15,6 @@
 #include "dxvk_objects.h"
 #include "dxvk_options.h"
 #include "dxvk_pipemanager.h"
-#include "dxvk_presenter.h"
 #include "dxvk_queue.h"
 #include "dxvk_recycler.h"
 #include "dxvk_renderpass.h"
@@ -25,6 +24,8 @@
 #include "dxvk_stats.h"
 #include "dxvk_unbound.h"
 #include "dxvk_marker.h"
+
+#include "../vulkan/vulkan_presenter.h"
 
 namespace dxvk {
   
@@ -454,14 +455,10 @@ namespace dxvk {
      * the submission thread. The status of this operation
      * can be retrieved with \ref waitForSubmission.
      * \param [in] presenter The presenter
-     * \param [in] presenteMode Present mode
-     * \param [in] frameId Optional frame ID
      * \param [out] status Present status
      */
     void presentImage(
-      const Rc<Presenter>&            presenter,
-            VkPresentModeKHR          presentMode,
-            uint64_t                  frameId,
+      const Rc<vk::Presenter>&        presenter,
             DxvkSubmitStatus*         status);
     
     /**
@@ -496,6 +493,17 @@ namespace dxvk {
      */
     void unlockSubmission() {
       m_submissionQueue.unlockDeviceQueue();
+    }
+
+    /**
+     * \brief Number of pending submissions
+     * 
+     * A return value of 0 indicates
+     * that the GPU is currently idle.
+     * \returns Pending submission count
+     */
+    uint32_t pendingSubmissions() const {
+      return m_submissionQueue.pendingSubmissions();
     }
 
     /**
@@ -556,7 +564,7 @@ namespace dxvk {
     
     DxvkRecycler<DxvkCommandList, 16> m_recycledCommandLists;
     
-    DxvkSubmissionQueue         m_submissionQueue;
+    DxvkSubmissionQueue m_submissionQueue;
 
     DxvkDevicePerfHints getPerfHints();
     

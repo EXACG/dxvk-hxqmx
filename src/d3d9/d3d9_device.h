@@ -28,17 +28,12 @@
 
 #include "d3d9_spec_constants.h"
 #include "d3d9_interop.h"
-#include "d3d9_on_12.h"
 
-#include <cstdint>
 #include <unordered_set>
-#include "d3d9_bridge.h"
-
 #include <vector>
 #include <type_traits>
 #include <unordered_map>
 
-#include "../util/util_flush.h"
 #include "../util/util_lru.h"
 
 namespace dxvk {
@@ -66,8 +61,6 @@ namespace dxvk {
     DirtyInputLayout,
     DirtyViewportScissor,
     DirtyMultiSampleState,
-    DirtyVertexBuffers,
-    DirtyIndexBuffer,
 
     DirtyFogState,
     DirtyFogColor,
@@ -130,10 +123,8 @@ namespace dxvk {
     constexpr static VkDeviceSize StagingBufferSize = 4ull << 20;
 
     friend class D3D9SwapChainEx;
-    friend struct D3D9WindowContext;
     friend class D3D9ConstantBuffer;
     friend class D3D9UserDefinedAnnotation;
-    friend class DxvkD3D8Bridge;
     friend D3D9VkInteropDevice;
   public:
 
@@ -766,24 +757,6 @@ namespace dxvk {
     HRESULT UnlockBuffer(
             D3D9CommonBuffer*       pResource);
 
-    /**
-     * @brief Uploads data from D3DPOOL_SYSMEM + D3DUSAGE_DYNAMIC buffers and binds the temporary buffers.
-     * 
-     * @param FirstVertexIndex The first vertex
-     * @param NumVertices The number of vertices that are accessed. If this is 0, the vertex buffer binding will not be modified.
-     * @param FirstIndex The first index
-     * @param NumIndices The number of indices that will be drawn. If this is 0, the index buffer binding will not be modified.
-     */
-    void UploadDynamicSysmemBuffers(
-            UINT&                   FirstVertexIndex,
-            UINT                    NumVertices,
-            UINT&                   FirstIndex,
-            UINT                    NumIndices,
-            INT&                    BaseVertexIndex,
-            bool*                   pDynamicVBOs,
-            bool*                   pDynamicIBO);
-    
-
     void SetupFPU();
 
     int64_t DetermineInitialTextureMemory();
@@ -793,16 +766,12 @@ namespace dxvk {
     void SynchronizeCsThread(uint64_t SequenceNumber);
 
     void Flush();
-    void FlushAndSync9On12();
 
     void EndFrame();
 
     void UpdateBoundRTs(uint32_t index);
 
     void UpdateActiveRTs(uint32_t index);
-
-    template <uint32_t Index>
-    void UpdateAnyColorWrites(bool has);
 
     void UpdateActiveTextures(uint32_t index, DWORD combinedUsage);
 
@@ -837,7 +806,7 @@ namespace dxvk {
     inline bool IsAlphaToCoverageEnabled() {
       const bool alphaTest = m_state.renderStates[D3DRS_ALPHATESTENABLE] != 0;
 
-      return (m_amdATOC || (m_nvATOC && alphaTest)) && m_flags.test(D3D9DeviceFlag::ValidSampleMask);
+      return m_amdATOC || (m_nvATOC && alphaTest);
     }
 
     inline bool IsDepthBiasEnabled() {
@@ -905,10 +874,6 @@ namespace dxvk {
 
     void MarkTextureBindingDirty(IDirect3DBaseTexture9* texture);
 
-    HRESULT STDMETHODCALLTYPE SetRenderTargetInternal(
-            DWORD              RenderTargetIndex,
-            IDirect3DSurface9* pRenderTarget);
-
     D3D9DrawInfo GenerateDrawInfo(
       D3DPRIMITIVETYPE PrimitiveType,
       UINT             PrimitiveCount,
@@ -916,7 +881,7 @@ namespace dxvk {
     
     uint32_t GetInstanceCount() const;
 
-    void PrepareDraw(D3DPRIMITIVETYPE PrimitiveType, bool UploadVBOs, bool UploadIBOs);
+    void PrepareDraw(D3DPRIMITIVETYPE PrimitiveType);
 
     template <DxsoProgramType ShaderStage>
     void BindShader(
@@ -950,7 +915,7 @@ namespace dxvk {
     void SetVertexBoolBitfield(uint32_t idx, uint32_t mask, uint32_t bits);
     void SetPixelBoolBitfield (uint32_t idx, uint32_t mask, uint32_t bits);
 
-    void ConsiderFlush(GpuFlushType FlushType);
+    void FlushImplicit(BOOL StrongHint);
 
     bool ChangeReportedMemory(int64_t delta) {
       if (IsExtended())
@@ -991,35 +956,41 @@ namespace dxvk {
     void TouchMappedTexture(D3D9CommonTexture* pTexture);
     void RemoveMappedTexture(D3D9CommonTexture* pTexture);
 
-    bool IsD3D8Compatible() const {
-      return m_isD3D8Compatible;
-    }
-
-    void SetD3D8CompatibilityMode(bool compatMode) {
-      if (compatMode)
-        Logger::info("The D3D9 device is now operating in D3D8 compatibility mode.");
-
-      m_isD3D8Compatible = compatMode;
-    }
-
-    // Device Lost
     bool IsDeviceLost() const {
       return m_deviceLostState != D3D9DeviceLostState::Ok;
     }
 
-    void NotifyFullscreen(HWND window, bool fullscreen);
-    void NotifyWindowActivated(HWND window, bool activated);
+    void NotifyFullscreen(HWND window, bool fullscreen) {
+      D3D9DeviceLock lock = LockDevice();
 
-    void IncrementLosableCounter() {
-      m_losableResourceCounter++;
+      if (fullscreen) {
+        if (unlikely(window != m_fullscreenWindow && m_fullscreenWindow != NULL)) {
+          Logger::warn("Multiple fullscreen windows detected.");
+        }
+        m_fullscreenWindow = window;
+      } else {
+        if (unlikely(m_fullscreenWindow != window)) {
+          Logger::warn("Window was not fullscreen in the first place.");
+        } else {
+          m_fullscreenWindow = 0;
+        }
+      }
     }
 
-    void DecrementLosableCounter() {
-      m_losableResourceCounter--;
-    }
+    void NotifyWindowActivated(HWND window, bool activated) {
+      D3D9DeviceLock lock = LockDevice();
+      
+      if (likely(!m_d3d9Options.deviceLost || IsExtended()))
+        return;
 
-    bool CanOnlySWVP() const {
-      return m_behaviorFlags & D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+      if (activated && m_deviceLostState == D3D9DeviceLostState::Lost) {
+        Logger::info("Device not reset");
+        m_deviceLostState = D3D9DeviceLostState::NotReset;
+      } else if (!activated && m_deviceLostState != D3D9DeviceLostState::Lost && m_fullscreenWindow == window) {
+        Logger::info("Device lost");
+        m_deviceLostState = D3D9DeviceLostState::Lost;
+        m_fullscreenWindow = NULL;
+      }
     }
 
   private:
@@ -1029,15 +1000,12 @@ namespace dxvk {
       return DxvkCsChunkRef(chunk, &m_csChunkPool);
     }
 
-    template<bool AllowFlush = true, typename Cmd>
+    template<typename Cmd>
     void EmitCs(Cmd&& command) {
       if (unlikely(!m_csChunk->push(command))) {
         EmitCsChunk(std::move(m_csChunk));
+
         m_csChunk = AllocCsChunk();
-
-        if constexpr (AllowFlush)
-          ConsiderFlush(GpuFlushType::ImplicitWeakHint);
-
         m_csChunk->push(command);
       }
     }
@@ -1051,17 +1019,9 @@ namespace dxvk {
       }
     }
 
-    bool CanSWVP() const {
+    bool CanSWVP() {
       return m_behaviorFlags & (D3DCREATE_MIXED_VERTEXPROCESSING | D3DCREATE_SOFTWARE_VERTEXPROCESSING);
     }
-
-    // Device Reset detection for D3D9SwapChainEx::Present
-    bool IsDeviceReset() {
-      return std::exchange(m_deviceHasBeenReset, false);
-    }
-
-    template <bool Synchronize9On12>
-    void ExecuteFlush();
 
     void DetermineConstantLayouts(bool canSWVP);
 
@@ -1087,7 +1047,7 @@ namespace dxvk {
     }
 
     inline uint32_t GetUPBufferSize(uint32_t vertexCount, uint32_t stride) {
-      return (vertexCount - 1) * stride + std::max(m_state.vertexDecl->GetSize(0), stride);
+      return (vertexCount - 1) * stride + std::max(m_state.vertexDecl->GetSize(), stride);
     }
 
     inline void FillUPVertexBuffer(void* buffer, const void* userData, uint32_t dataSize, uint32_t bufferSize) {
@@ -1245,38 +1205,11 @@ namespace dxvk {
 
     uint64_t GetCurrentSequenceNumber();
 
-    /**
-     * @brief Get the swapchain that was used the most recently for presenting
-     * Has to be externally synchronized.
-     * 
-     * @return D3D9SwapChainEx* Swapchain
-     */
-    D3D9SwapChainEx* GetMostRecentlyUsedSwapchain() {
-      return m_mostRecentlyUsedSwapchain;
-    }
-
-    /**
-     * @brief Set the swapchain that was used the most recently for presenting
-     * Has to be externally synchronized.
-     * 
-     * @param swapchain Swapchain
-     */
-    void SetMostRecentlyUsedSwapchain(D3D9SwapChainEx* swapchain) {
-      m_mostRecentlyUsedSwapchain = swapchain;
-    }
-
-    /**
-     * @brief Reset the most recently swapchain back to the implicit one
-     * Has to be externally synchronized.
-     */
-    void ResetMostRecentlyUsedSwapchain() {
-      m_mostRecentlyUsedSwapchain = m_implicitSwapchain.ptr();
-    }
-
     Com<D3D9InterfaceEx>            m_parent;
     D3DDEVTYPE                      m_deviceType;
     HWND                            m_window;
     WORD                            m_behaviorFlags;
+    D3DPRESENT_PARAMETERS           m_presentParams;
 
     D3D9Adapter*                    m_adapter;
     Rc<DxvkDevice>                  m_dxvkDevice;
@@ -1355,16 +1288,14 @@ namespace dxvk {
     uint32_t                        m_dirtySamplerStates = 0;
     uint32_t                        m_dirtyTextures      = 0;
 
-    uint32_t                        m_boundRTs        : 4;
-    uint32_t                        m_anyColorWrites  : 4;
-    uint32_t                        m_activeRTsWhichAreTextures : 4;
-    uint32_t                        m_alphaSwizzleRTs : 4;
-    uint32_t                        m_lastHazardsRT   : 4;
+    uint32_t                        m_boundRTs = 0;
 
-    uint32_t                        m_activeTextureRTs       = 0;
-    uint32_t                        m_activeTextureDSs       = 0;
+    uint32_t                        m_activeRTs              = 0;
+    uint32_t                        m_activeRTTextures       = 0;
+    uint32_t                        m_activeDSTextures       = 0;
     uint32_t                        m_activeHazardsRT        = 0;
     uint32_t                        m_activeHazardsDS        = 0;
+    uint32_t                        m_alphaSwizzleRTs        = 0;
     uint32_t                        m_activeTextures         = 0;
     uint32_t                        m_activeTexturesToUpload = 0;
     uint32_t                        m_activeTexturesToGen    = 0;
@@ -1379,6 +1310,7 @@ namespace dxvk {
     uint32_t                        m_fetch4        = 0;
 
     uint32_t                        m_lastHazardsDS = 0;
+    uint32_t                        m_lastHazardsRT = 0;
     uint32_t                        m_lastSamplerTypesFF = 0;
 
     D3D9SpecializationInfo          m_specInfo = D3D9SpecializationInfo();
@@ -1387,17 +1319,14 @@ namespace dxvk {
     D3D9ShaderMasks                 m_psShaderMasks = FixedFunctionMask;
 
     bool                            m_isSWVP;
-    bool                            m_isD3D8Compatible = false;
-    bool                            m_amdATOC          = false;
-    bool                            m_nvATOC           = false;
-    bool                            m_ffZTest          = false;
+    bool                            m_amdATOC         = false;
+    bool                            m_nvATOC          = false;
+    bool                            m_ffZTest         = false;
     
     VkImageLayout                   m_hazardLayout = VK_IMAGE_LAYOUT_GENERAL;
 
     bool                            m_usingGraphicsPipelines = false;
-    bool                            m_deviceHasBeenReset = false;
 
-    DxvkDepthBiasRepresentation     m_depthBiasRepresentation = { VK_DEPTH_BIAS_REPRESENTATION_LEAST_REPRESENTABLE_VALUE_FORMAT_EXT, false };
     float                           m_depthBiasScale  = 0.0f;
 
     uint32_t                        m_robustSSBOAlignment     = 1;
@@ -1419,25 +1348,18 @@ namespace dxvk {
     D3D9ViewportInfo                m_viewportInfo;
 
     DxvkCsChunkPool                 m_csChunkPool;
+    dxvk::high_resolution_clock::time_point m_lastFlush
+      = dxvk::high_resolution_clock::now();
     DxvkCsThread                    m_csThread;
     DxvkCsChunkRef                  m_csChunk;
     uint64_t                        m_csSeqNum = 0ull;
-
-    Rc<sync::Fence>                 m_submissionFence;
-    uint64_t                        m_submissionId = 0ull;
-    DxvkSubmitStatus                m_submitStatus;
-
-    uint64_t                        m_flushSeqNum = 0ull;
-    GpuFlushTracker                 m_flushTracker;
+    bool                            m_csIsBusy = false;
 
     std::atomic<int64_t>            m_availableMemory = { 0 };
     std::atomic<int32_t>            m_samplerCount    = { 0 };
 
     D3D9DeviceLostState             m_deviceLostState          = D3D9DeviceLostState::Ok;
     HWND                            m_fullscreenWindow         = NULL;
-    std::atomic<uint32_t>           m_losableResourceCounter   = { 0 };
-
-    D3D9SwapChainEx*                m_mostRecentlyUsedSwapchain = nullptr;
 
 #ifdef D3D9_ALLOW_UNMAPPING
     lru_list<D3D9CommonTexture*>    m_mappedTextures;
@@ -1448,8 +1370,6 @@ namespace dxvk {
     Direct3DState9                  m_state;
 
     D3D9VkInteropDevice             m_d3d9Interop;
-    D3D9On12                        m_d3d9On12;
-    DxvkD3D8Bridge                  m_d3d8Bridge;
   };
 
 }

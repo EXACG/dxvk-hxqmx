@@ -11,9 +11,6 @@ namespace dxvk {
 
   Singleton<DxvkInstance> g_dxvkInstance;
 
-  std::mutex s_globalHDRStateMutex;
-  DXVK_VK_GLOBAL_HDR_STATE s_globalHDRState{};
-
   DxgiVkFactory::DxgiVkFactory(DxgiFactory* pFactory)
   : m_factory(pFactory) {
 
@@ -50,36 +47,10 @@ namespace dxvk {
   }
 
 
-  HRESULT STDMETHODCALLTYPE DxgiVkFactory::GetGlobalHDRState(
-          DXGI_COLOR_SPACE_TYPE   *pOutColorSpace,
-          DXGI_HDR_METADATA_HDR10 *pOutMetadata) {
-    std::unique_lock lock(s_globalHDRStateMutex);
-    if (!s_globalHDRState.Serial)
-      return S_FALSE;
-
-    *pOutColorSpace = s_globalHDRState.ColorSpace;
-    *pOutMetadata   = s_globalHDRState.Metadata.HDR10;
-    return S_OK;
-  }
-
-
-  HRESULT STDMETHODCALLTYPE DxgiVkFactory::SetGlobalHDRState(
-          DXGI_COLOR_SPACE_TYPE    ColorSpace,
-    const DXGI_HDR_METADATA_HDR10 *pMetadata) {
-    std::unique_lock lock(s_globalHDRStateMutex);
-    static uint32_t s_GlobalHDRStateSerial = 0;
-
-    s_globalHDRState.Serial     = ++s_GlobalHDRStateSerial;
-    s_globalHDRState.ColorSpace = ColorSpace;
-    s_globalHDRState.Metadata.Type  = DXGI_HDR_METADATA_TYPE_HDR10;
-    s_globalHDRState.Metadata.HDR10 = *pMetadata;
-
-    return S_OK;
-  }
 
 
   DxgiFactory::DxgiFactory(UINT Flags)
-  : m_instance        (g_dxvkInstance.acquire(0)),
+  : m_instance        (g_dxvkInstance.acquire()),
     m_interop         (this),
     m_options         (m_instance->config()),
     m_monitorInfo     (this, m_options),
@@ -156,8 +127,7 @@ namespace dxvk {
       return S_OK;
     }
 
-    if (riid == __uuidof(IDXGIVkInteropFactory)
-     || riid == __uuidof(IDXGIVkInteropFactory1)) {
+    if (riid == __uuidof(IDXGIVkInteropFactory)) {
       *ppvObject = ref(&m_interop);
       return S_OK;
     }
@@ -230,7 +200,7 @@ namespace dxvk {
     descFs.Windowed         = pDesc->Windowed;
     
     IDXGISwapChain1* swapChain = nullptr;
-    HRESULT hr = CreateSwapChainForHwndBase(
+    HRESULT hr = CreateSwapChainForHwnd(
       pDevice, pDesc->OutputWindow,
       &desc, &descFs, nullptr,
       &swapChain);
@@ -241,19 +211,6 @@ namespace dxvk {
   
   
   HRESULT STDMETHODCALLTYPE DxgiFactory::CreateSwapChainForHwnd(
-          IUnknown*             pDevice,
-          HWND                  hWnd,
-    const DXGI_SWAP_CHAIN_DESC1* pDesc,
-    const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
-          IDXGIOutput*          pRestrictToOutput,
-          IDXGISwapChain1**     ppSwapChain) {
-    return CreateSwapChainForHwndBase(
-      pDevice, hWnd,
-      pDesc, pFullscreenDesc, pRestrictToOutput,
-      ppSwapChain);
-  }
-
-  HRESULT STDMETHODCALLTYPE DxgiFactory::CreateSwapChainForHwndBase(
           IUnknown*             pDevice,
           HWND                  hWnd,
     const DXGI_SWAP_CHAIN_DESC1* pDesc,
@@ -450,8 +407,7 @@ namespace dxvk {
     if (pWindowHandle == nullptr)
       return DXGI_ERROR_INVALID_CALL;
     
-    // Wine tests show that this is always null for whatever reason
-    *pWindowHandle = nullptr;
+    *pWindowHandle = m_associatedWindow;
     return S_OK;
   }
   
@@ -466,6 +422,7 @@ namespace dxvk {
   
   HRESULT STDMETHODCALLTYPE DxgiFactory::MakeWindowAssociation(HWND WindowHandle, UINT Flags) {
     Logger::warn("DXGI: MakeWindowAssociation: Ignoring flags");
+    m_associatedWindow = WindowHandle;
     return S_OK;
   }
   
@@ -561,10 +518,5 @@ namespace dxvk {
     return E_NOTIMPL;
   }
 
-
-  DXVK_VK_GLOBAL_HDR_STATE DxgiFactory::GlobalHDRState() {
-    std::unique_lock lock(s_globalHDRStateMutex);
-    return s_globalHDRState;
-  }
 
 }

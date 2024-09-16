@@ -1,7 +1,6 @@
 #pragma once
 
 #include "dxvk_adapter.h"
-#include "dxvk_options.h"
 
 namespace dxvk {
   
@@ -32,10 +31,7 @@ namespace dxvk {
     
   public:
     
-    DxvkDeviceFilter(
-            DxvkDeviceFilterFlags flags,
-      const DxvkOptions&          options);
-
+    DxvkDeviceFilter(DxvkDeviceFilterFlags flags);
     ~DxvkDeviceFilter();
     
     /**

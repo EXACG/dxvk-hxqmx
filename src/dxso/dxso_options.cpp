@@ -29,9 +29,8 @@ namespace dxvk {
 
     vertexFloatConstantBufferAsSSBO = pDevice->GetVertexConstantLayout().floatSize() > devInfo.core.properties.limits.maxUniformBufferRange;
 
+    longMad = options.longMad;
     robustness2Supported = devFeatures.extRobustness2.robustBufferAccess2;
-
-    drefScaling         = options.drefScaling;
   }
 
 }

@@ -86,7 +86,6 @@ namespace dxvk {
     
     ~Rc() {
       this->decRef();
-      m_object = nullptr;
     }
     
     T& operator *  () const { return *m_object; }

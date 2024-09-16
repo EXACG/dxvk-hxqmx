@@ -223,15 +223,13 @@ namespace dxvk {
             VkPolygonMode         polygonMode,
             VkSampleCountFlags    sampleCount,
             VkConservativeRasterizationModeEXT conservativeMode,
-            VkBool32              flatShading,
-            VkLineRasterizationModeEXT lineMode)
+            VkBool32              flatShading)
     : m_depthClipEnable (uint16_t(depthClipEnable)),
       m_depthBiasEnable (uint16_t(depthBiasEnable)),
       m_polygonMode     (uint16_t(polygonMode)),
       m_sampleCount     (uint16_t(sampleCount)),
       m_conservativeMode(uint16_t(conservativeMode)),
       m_flatShading     (uint16_t(flatShading)),
-      m_lineMode        (uint16_t(lineMode)),
       m_reserved        (0) { }
     
     VkBool32 depthClipEnable() const {
@@ -258,10 +256,6 @@ namespace dxvk {
       return VkBool32(m_flatShading);
     }
 
-    VkLineRasterizationModeEXT lineMode() const {
-      return VkLineRasterizationModeEXT(m_lineMode);
-    }
-
     bool eq(const DxvkRsInfo& other) const {
       return !std::memcmp(this, &other, sizeof(*this));
     }
@@ -274,8 +268,7 @@ namespace dxvk {
     uint16_t m_sampleCount            : 5;
     uint16_t m_conservativeMode       : 2;
     uint16_t m_flatShading            : 1;
-    uint16_t m_lineMode               : 2;
-    uint16_t m_reserved               : 2;
+    uint16_t m_reserved               : 4;
   
   };
 

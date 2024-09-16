@@ -13,8 +13,6 @@ uniform u_info_t {
 } u_info;
 
 void main() {
-  vec4 color = texelFetch(s_image,
+  o_color = texelFetch(s_image,
     ivec3(gl_FragCoord.xy + u_info.offset, gl_Layer), 0);
-  o_color = color;
-  gl_FragDepth = color.r;
 }

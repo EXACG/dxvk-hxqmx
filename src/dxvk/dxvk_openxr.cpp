@@ -147,9 +147,11 @@ namespace dxvk {
 
 
   HMODULE DxvkXrProvider::loadLibrary() {
-    HMODULE handle = ::LoadLibrary("wineopenxr.dll");
-
-    m_loadedOxrApi = handle != nullptr;
+    HMODULE handle = nullptr;
+    if (!(handle = ::GetModuleHandle("wineopenxr.dll"))) {
+      handle = ::LoadLibrary("wineopenxr.dll");
+      m_loadedOxrApi = handle != nullptr;
+    }
     return handle;
   }
 

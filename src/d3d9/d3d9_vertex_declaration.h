@@ -50,8 +50,8 @@ namespace dxvk {
       return m_elements;
     }
 
-    UINT GetSize(UINT Stream) const {
-      return m_sizes[Stream];
+    UINT GetSize() const {
+      return m_size;
     }
 
     bool TestFlag(D3D9VertexDeclFlag flag) const {
@@ -94,7 +94,8 @@ namespace dxvk {
 
     uint32_t                       m_texcoordMask = 0;
 
-    std::array<uint32_t, caps::MaxStreams> m_sizes = {};
+    // The size of Stream 0. That's all we care about.
+    uint32_t                       m_size = 0;
 
   };
 

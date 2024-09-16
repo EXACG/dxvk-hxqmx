@@ -17,10 +17,6 @@ namespace dxvk {
     CaptureType(Type);
   }
 
-  D3D9StateBlock::~D3D9StateBlock() {
-    if (!m_parent->IsD3D8Compatible())
-      m_parent->DecrementLosableCounter();
-  }
 
   HRESULT STDMETHODCALLTYPE D3D9StateBlock::QueryInterface(
           REFIID  riid,
@@ -49,7 +45,7 @@ namespace dxvk {
     if (m_captures.flags.test(D3D9CapturedStateFlag::VertexDecl))
       SetVertexDeclaration(m_deviceState->vertexDecl.ptr());
 
-    ApplyOrCapture<D3D9StateFunction::Capture, true>();
+    ApplyOrCapture<D3D9StateFunction::Capture>();
 
     return D3D_OK;
   }
@@ -61,7 +57,7 @@ namespace dxvk {
     if (m_captures.flags.test(D3D9CapturedStateFlag::VertexDecl) && m_state.vertexDecl != nullptr)
       m_parent->SetVertexDeclaration(m_state.vertexDecl.ptr());
 
-    ApplyOrCapture<D3D9StateFunction::Apply, false>();
+    ApplyOrCapture<D3D9StateFunction::Apply>();
     m_applying = false;
 
     return D3D_OK;
@@ -114,20 +110,6 @@ namespace dxvk {
     m_state.vertexBuffers[StreamNumber].vertexBuffer = pStreamData;
 
     m_state.vertexBuffers[StreamNumber].offset = OffsetInBytes;
-    m_state.vertexBuffers[StreamNumber].stride = Stride;
-
-    m_captures.flags.set(D3D9CapturedStateFlag::VertexBuffers);
-    m_captures.vertexBuffers.set(StreamNumber, true);
-    return D3D_OK;
-  }
-
-
-  HRESULT D3D9StateBlock::SetStreamSourceWithoutOffset(
-          UINT                StreamNumber,
-          D3D9VertexBuffer*   pStreamData,
-          UINT                Stride) {
-    m_state.vertexBuffers[StreamNumber].vertexBuffer = pStreamData;
-
     m_state.vertexBuffers[StreamNumber].stride = Stride;
 
     m_captures.flags.set(D3D9CapturedStateFlag::VertexBuffers);
@@ -586,12 +568,8 @@ namespace dxvk {
       m_captures.flags.set(D3D9CapturedStateFlag::Material);
     }
 
-    if (Type != D3D9StateBlockType::None) {
-      if (m_captures.flags.test(D3D9CapturedStateFlag::VertexDecl))
-        SetVertexDeclaration(m_deviceState->vertexDecl.ptr());
-
-      ApplyOrCapture<D3D9StateFunction::Capture, false>();
-    }
+    if (Type != D3D9StateBlockType::None)
+      this->Capture();
   }
 
 }

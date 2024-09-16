@@ -6,8 +6,9 @@
 
 #include "../util/thread.h"
 
+#include "../vulkan/vulkan_presenter.h"
+
 #include "dxvk_cmdlist.h"
-#include "dxvk_presenter.h"
 
 namespace dxvk {
   
@@ -42,9 +43,7 @@ namespace dxvk {
    * a swap chain image on the device.
    */
   struct DxvkPresentInfo {
-    Rc<Presenter>       presenter;
-    VkPresentModeKHR    presentMode;
-    uint64_t            frameId;
+    Rc<vk::Presenter>   presenter;
   };
 
 
@@ -52,7 +51,6 @@ namespace dxvk {
    * \brief Submission queue entry
    */
   struct DxvkSubmitEntry {
-    VkResult            result;
     DxvkSubmitStatus*   status;
     DxvkSubmitInfo      submit;
     DxvkPresentInfo     present;
@@ -71,6 +69,17 @@ namespace dxvk {
       const DxvkQueueCallback&  callback);
 
     ~DxvkSubmissionQueue();
+
+    /**
+     * \brief Number of pending submissions
+     * 
+     * A return value of 0 indicates
+     * that the GPU is currently idle.
+     * \returns Pending submission count
+     */
+    uint32_t pendingSubmissions() const {
+      return m_pending.load();
+    }
 
     /**
      * \brief Retrieves estimated GPU idle time
@@ -152,11 +161,6 @@ namespace dxvk {
     }
 
     /**
-     * \brief Waits for all submissions to complete
-     */
-    void waitForIdle();
-
-    /**
      * \brief Locks device queue
      *
      * Locks the mutex that protects the Vulkan queue
@@ -182,6 +186,7 @@ namespace dxvk {
     std::atomic<VkResult>       m_lastError = { VK_SUCCESS };
     
     std::atomic<bool>           m_stopped = { false };
+    std::atomic<uint32_t>       m_pending = { 0u };
     std::atomic<uint64_t>       m_gpuIdle = { 0ull };
 
     dxvk::mutex                 m_mutex;

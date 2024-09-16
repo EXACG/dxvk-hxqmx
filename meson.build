@@ -1,13 +1,11 @@
-project('dxvk', ['c', 'cpp'], version : 'vFTJ20240916', meson_version : '>= 0.58', default_options : [ 'cpp_std=c++17', 'warning_level=2' ])
+project('dxvk', ['c', 'cpp'], version : 'vFTJMix20240916', meson_version : '>= 0.49', default_options : [ 'cpp_std=c++17', 'warning_level=2' ])
 
-pkg = import('pkgconfig')
 cpu_family = target_machine.cpu_family()
 platform   = target_machine.system()
-fs = import('fs')
 
 cpp = meson.get_compiler('cpp')
 cc = meson.get_compiler('c')
-dxvk_is_msvc = cpp.get_argument_syntax() == 'msvc'
+dxvk_is_msvc = cpp.get_id() == 'msvc'
 
 compiler_args = [
   '-msse',
@@ -35,61 +33,44 @@ if get_option('build_id')
   ]
 endif
 
-dxvk_include_dirs = ['./include']
-if fs.is_dir('./include/vulkan/include')
-  dxvk_include_dirs += ['./include/vulkan/include']
-elif not cpp.check_header('vulkan/vulkan.h')
-  error('Missing Vulkan-Headers')
-endif
-if fs.is_dir('./include/spirv/include')
-  dxvk_include_dirs += ['./include/spirv/include']
-elif not cpp.check_header('spirv/unified1/spirv.hpp')
-  error('Missing SPIRV-Headers')
-endif
+dxvk_include_dirs = [
+  './include',
+  './include/vulkan/include',
+  './include/spirv/include'
+]
 
-dep_displayinfo = dependency(
-  'libdisplay-info',
-  version: ['>= 0.0.0', '< 0.2.0'],
-  fallback: ['libdisplay-info', 'di_dep'],
-  default_options: ['default_library=static'],
-)
+proj_displayinfo = subproject('libdisplay-info')
+dep_displayinfo = proj_displayinfo.get_variable('di_dep')
 
 if platform == 'windows'
-  dxvk_so_version = {'name_prefix': ''}
-
   compiler_args += [
     '-DNOMINMAX',
     '-D_WIN32_WINNT=0xa00',
   ]
 
-  if not dxvk_is_msvc
-    link_args += [
-      '-static',
-      '-static-libgcc',
-      '-static-libstdc++',
-      # We need to set the section alignment for debug symbols to
-      # work properly as well as avoiding a memcpy from the Wine loader.
-      '-Wl,--file-alignment=4096',
-    ]
+  link_args += [
+    '-static',
+    '-static-libgcc',
+    '-static-libstdc++',
+    # We need to set the section alignment for debug symbols to
+    # work properly as well as avoiding a memcpy from the Wine loader.
+    '-Wl,--file-alignment=4096',
+  ]
 
-    # Wine's built-in back traces only work with dwarf4 symbols
-    if get_option('debug')
-      compiler_args += [
-        '-gdwarf-4',
-      ]
-    endif
-
-    # Enable stdcall fixup on 32-bit
-    if cpu_family == 'x86'
-      link_args += [
-        '-Wl,--enable-stdcall-fixup',
-        '-Wl,--kill-at',
-      ]
-    endif
-  else
-    link_args += [
-      '/FILEALIGN:4096',
+  # Wine's built-in back traces only work with dwarf2 symbols
+  if get_option('debug')
+    compiler_args += [
+      '-gstrict-dwarf',
+      '-gdwarf-2',
     ]
+  endif
+
+  # Enable stdcall fixup on 32-bit
+  if cpu_family == 'x86'
+    link_args += [
+      '-Wl,--enable-stdcall-fixup',
+      '-Wl,--add-stdcall-alias',
+  ]
   endif
 
   lib_d3d9    = cpp.find_library('d3d9')
@@ -118,21 +99,10 @@ if platform == 'windows'
     )
   endif
 
+  dxvk_wsi = 'win32'
   dxvk_name_prefix = ''
   compiler_args += ['-DDXVK_WSI_WIN32']
 else
-  dxvk_abi_version = '0'
-  dxvk_version_raw = meson.project_version().strip('v').split('.')
-  dxvk_version = [ dxvk_version_raw[0] ]
-  foreach i : [ 1, 2 ]
-    padded = dxvk_version_raw[i]
-    if padded.to_int() < 10
-      padded = '0' + padded
-    endif
-    dxvk_version += [ padded ]
-  endforeach
-  dxvk_so_version = {'version': dxvk_abi_version + '.' + dxvk_version[0] + dxvk_version[1] + dxvk_version[2]}
-
   wrc           = find_program('touch')
   wrc_generator = generator(wrc, output : [ '@BASENAME@_ignored.h' ], arguments : [ '@OUTPUT@' ] )
 
@@ -142,20 +112,17 @@ else
     './include/native/directx'
   ]
 
-  lib_sdl2 = dependency('SDL2', required: false)
-  lib_glfw = dependency('glfw', required: false)
-  if lib_sdl2.found()
+  dxvk_wsi = get_option('dxvk_native_wsi')
+  
+  if dxvk_wsi == 'sdl2'
+    lib_sdl2 = cpp.find_library('SDL2')
     compiler_args += ['-DDXVK_WSI_SDL2']
-  endif
-  if lib_glfw.found()
+  elif dxvk_wsi == 'glfw'
+    lib_glfw = cpp.find_library('glfw')
     compiler_args += ['-DDXVK_WSI_GLFW']
   endif
-  if (not lib_sdl2.found() and not lib_glfw.found())
-    error('SDL2 or GLFW are required to build dxvk-native')
-  endif
   
-  dxvk_name_prefix = 'dxvk_'
-  dxvk_pkg_prefix = 'dxvk-'
+  dxvk_name_prefix = 'libdxvk_'
 
   link_args += [
     '-static-libgcc',
@@ -171,12 +138,13 @@ add_project_link_arguments(cpp.get_supported_link_arguments(link_args), language
 add_project_link_arguments(cc.get_supported_link_arguments(link_args), language: 'c')
 
 exe_ext = ''
+dll_ext = ''
 def_spec_ext = '.def'
 
-glsl_compiler = find_program('glslang', 'glslangValidator')
+glsl_compiler = find_program('glslangValidator')
 glsl_args = [
   '--quiet',
-  '--target-env', 'vulkan1.3',
+  '--target-env', 'vulkan1.2',
   '--vn', '@BASENAME@',
   '--depfile', '@DEPFILE@',
   '@INPUT@',
@@ -194,9 +162,5 @@ dxvk_version = vcs_tag(
   input:  'version.h.in',
   output: 'version.h',
 )
-
-if platform != 'windows'
-  subdir('include/native')
-endif
 
 subdir('src')

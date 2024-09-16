@@ -1,6 +1,5 @@
-#if defined(DXVK_WSI_WIN32)
-
-#include "wsi_platform_win32.h"
+#include "../wsi_window.h"
+#include "../wsi_monitor.h"
 
 #include "../../util/util_string.h"
 #include "../../util/log/log.h"
@@ -95,7 +94,7 @@ namespace dxvk::wsi {
   }
 
 
-  void Win32WsiDriver::getWindowSize(
+  void getWindowSize(
         HWND      hWindow,
         uint32_t* pWidth,
         uint32_t* pHeight) {
@@ -110,7 +109,7 @@ namespace dxvk::wsi {
   }
 
 
-  void Win32WsiDriver::resizeWindow(
+  void resizeWindow(
           HWND             hWindow,
           DxvkWindowState* pState,
           uint32_t         width,
@@ -131,7 +130,7 @@ namespace dxvk::wsi {
   }
 
 
-  bool Win32WsiDriver::setWindowMode(
+  bool setWindowMode(
           HMONITOR                hMonitor,
           HWND                    hWindow,
     const WsiMode&                mode) {
@@ -164,21 +163,21 @@ namespace dxvk::wsi {
   }
 
 
-  bool Win32WsiDriver::enterFullscreenMode(
+  bool enterFullscreenMode(
           HMONITOR         hMonitor,
           HWND             hWindow,
           DxvkWindowState* pState,
           [[maybe_unused]]
           bool             modeSwitch) {
     // Find a display mode that matches what we need
-    ::GetWindowRect(hWindow, &pState->win.rect);
+    ::GetWindowRect(hWindow, &pState->rect);
 
     // Change the window flags to remove the decoration etc.
     LONG style   = ::GetWindowLongW(hWindow, GWL_STYLE);
     LONG exstyle = ::GetWindowLongW(hWindow, GWL_EXSTYLE);
     
-    pState->win.style = style;
-    pState->win.exstyle = exstyle;
+    pState->style = style;
+    pState->exstyle = exstyle;
     
     style   &= ~WS_OVERLAPPEDWINDOW;
     exstyle &= ~WS_EX_OVERLAPPEDWINDOW;
@@ -197,7 +196,7 @@ namespace dxvk::wsi {
   }
 
 
-  bool Win32WsiDriver::leaveFullscreenMode(
+  bool leaveFullscreenMode(
           HWND             hWindow,
           DxvkWindowState* pState,
           bool             restoreCoordinates) {
@@ -206,27 +205,27 @@ namespace dxvk::wsi {
     LONG curStyle   = ::GetWindowLongW(hWindow, GWL_STYLE)   & ~WS_VISIBLE;
     LONG curExstyle = ::GetWindowLongW(hWindow, GWL_EXSTYLE) & ~WS_EX_TOPMOST;
 
-    if (curStyle   == (pState->win.style   & ~(WS_VISIBLE    | WS_OVERLAPPEDWINDOW))
-     && curExstyle == (pState->win.exstyle & ~(WS_EX_TOPMOST | WS_EX_OVERLAPPEDWINDOW))) {
-      ::SetWindowLongW(hWindow, GWL_STYLE,   pState->win.style);
-      ::SetWindowLongW(hWindow, GWL_EXSTYLE, pState->win.exstyle);
+    if (curStyle   == (pState->style   & ~(WS_VISIBLE    | WS_OVERLAPPEDWINDOW))
+     && curExstyle == (pState->exstyle & ~(WS_EX_TOPMOST | WS_EX_OVERLAPPEDWINDOW))) {
+      ::SetWindowLongW(hWindow, GWL_STYLE,   pState->style);
+      ::SetWindowLongW(hWindow, GWL_EXSTYLE, pState->exstyle);
     }
 
     // Restore window position and apply the style
     UINT flags = SWP_FRAMECHANGED | SWP_NOACTIVATE;
-    const RECT rect = pState->win.rect;
+    const RECT rect = pState->rect;
 
     if (!restoreCoordinates)
       flags |= SWP_NOSIZE | SWP_NOMOVE;
     
-    ::SetWindowPos(hWindow, (pState->win.exstyle & WS_EX_TOPMOST) ? HWND_TOPMOST : HWND_NOTOPMOST,
+    ::SetWindowPos(hWindow, (pState->exstyle & WS_EX_TOPMOST) ? HWND_TOPMOST : HWND_NOTOPMOST,
       rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, flags);
 
     return true;
   }
 
 
-  bool Win32WsiDriver::restoreDisplayMode() {
+  bool restoreDisplayMode() {
     bool success = true;
     bool result = ::EnumDisplayMonitors(nullptr, nullptr,
       &restoreDisplayModeCallback,
@@ -236,7 +235,7 @@ namespace dxvk::wsi {
   }
 
 
-  HMONITOR Win32WsiDriver::getWindowMonitor(HWND hWindow) {
+  HMONITOR getWindowMonitor(HWND hWindow) {
     RECT windowRect = { 0, 0, 0, 0 };
     ::GetWindowRect(hWindow, &windowRect);
     
@@ -249,12 +248,12 @@ namespace dxvk::wsi {
   }
 
 
-  bool Win32WsiDriver::isWindow(HWND hWindow) {
+  bool isWindow(HWND hWindow) {
     return ::IsWindow(hWindow);
   }
 
 
-  void Win32WsiDriver::updateFullscreenWindow(
+  void updateFullscreenWindow(
           HMONITOR hMonitor,
           HWND     hWindow,
           bool     forceTopmost) {
@@ -275,7 +274,7 @@ namespace dxvk::wsi {
   }
 
 
-  VkResult Win32WsiDriver::createSurface(
+  VkResult createSurface(
           HWND                hWindow,
           PFN_vkGetInstanceProcAddr pfnVkGetInstanceProcAddr,
           VkInstance          instance,
@@ -297,5 +296,3 @@ namespace dxvk::wsi {
   }
 
 }
-
-#endif

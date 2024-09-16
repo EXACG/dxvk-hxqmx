@@ -255,17 +255,8 @@ namespace dxvk {
      */
     bool matchesDriver(
             VkDriverIdKHR       driver,
-            Version             minVer,
-            Version             maxVer) const;
-
-    /**
-     * \brief Tests if the driver matches certain criteria
-     *
-     * \param [in] driver Driver ID
-     * \returns \c True if the driver matches these criteria
-     */
-    bool matchesDriver(
-            VkDriverIdKHR       driver) const;
+            uint32_t            minVer,
+            uint32_t            maxVer) const;
     
     /**
      * \brief Logs DXVK adapter info
@@ -352,8 +343,6 @@ namespace dxvk {
     static void logFeatures(const DxvkDeviceFeatures& features);
     static void logQueueFamilies(const DxvkAdapterQueueIndices& queues);
     
-    static Version decodeDriverVersion(VkDriverId driverId, uint32_t version);
-
   };
   
 }

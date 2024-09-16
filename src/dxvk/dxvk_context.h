@@ -810,7 +810,7 @@ namespace dxvk {
             uint32_t indexCount,
             uint32_t instanceCount,
             uint32_t firstIndex,
-            int32_t  vertexOffset,
+            uint32_t vertexOffset,
             uint32_t firstInstance);
     
     /**
@@ -1141,14 +1141,6 @@ namespace dxvk {
      */
     void setDepthBias(
             DxvkDepthBias       depthBias);
-
-    /**
-     * \brief Sets depth bias representation
-     *
-     * \param [in] depthBiasRepresentation Depth bias representation
-     */
-    void setDepthBiasRepresentation(
-            DxvkDepthBiasRepresentation  depthBiasRepresentation);
     
     /**
      * \brief Sets depth bounds
@@ -1506,7 +1498,6 @@ namespace dxvk {
       const Rc<DxvkImage>&        srcImage,
             VkImageSubresourceLayers srcSubresource,
             VkOffset3D            srcOffset,
-            VkFormat              srcFormat,
             VkExtent3D            extent);
 
     bool copyImageClear(

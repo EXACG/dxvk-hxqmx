@@ -134,7 +134,7 @@ namespace dxvk {
     if (rt && CheckFormat == D3D9Format::A8 && m_parent->GetOptions().disableA8RT)
       return D3DERR_NOTAVAILABLE;
 
-    if (ds && !IsDepthStencilFormat(CheckFormat))
+    if (ds && !IsDepthFormat(CheckFormat))
       return D3DERR_NOTAVAILABLE;
 
     if (rt && CheckFormat == D3D9Format::NULL_FORMAT && twoDimensional)
@@ -162,18 +162,11 @@ namespace dxvk {
     if (mapping.FormatSrgb  == VK_FORMAT_UNDEFINED && srgb)
       return D3DERR_NOTAVAILABLE;
 
-    if (RType == D3DRTYPE_CUBETEXTURE && mapping.Aspect != VK_IMAGE_ASPECT_COLOR_BIT)
-      return D3DERR_NOTAVAILABLE;
-
     if (RType == D3DRTYPE_VERTEXBUFFER || RType == D3DRTYPE_INDEXBUFFER)
       return D3D_OK;
 
     // Let's actually ask Vulkan now that we got some quirks out the way!
-    VkFormat format = mapping.FormatColor;
-    if (unlikely(mapping.ConversionFormatInfo.FormatColor != VK_FORMAT_UNDEFINED)) {
-      format = mapping.ConversionFormatInfo.FormatColor;
-    }
-    return CheckDeviceVkFormat(format, Usage, RType);
+    return CheckDeviceVkFormat(mapping.FormatColor, Usage, RType);
   }
 
 
@@ -228,18 +221,14 @@ namespace dxvk {
           D3D9Format AdapterFormat,
           D3D9Format RenderTargetFormat,
           D3D9Format DepthStencilFormat) {
-    if (!IsDepthStencilFormat(DepthStencilFormat))
-      return D3DERR_NOTAVAILABLE;
-
-    auto dsfMapping = GetFormatMapping(DepthStencilFormat);
-    if (dsfMapping.FormatColor == VK_FORMAT_UNDEFINED)
+    if (!IsDepthFormat(DepthStencilFormat))
       return D3DERR_NOTAVAILABLE;
 
     if (RenderTargetFormat == dxvk::D3D9Format::NULL_FORMAT)
       return D3D_OK;
 
-    auto rtfMapping = GetFormatMapping(RenderTargetFormat);
-    if (rtfMapping.FormatColor == VK_FORMAT_UNDEFINED)
+    auto mapping = ConvertFormatUnfixed(RenderTargetFormat);
+    if (mapping.FormatColor == VK_FORMAT_UNDEFINED)
       return D3DERR_NOTAVAILABLE;
 
     return D3D_OK;
@@ -251,8 +240,7 @@ namespace dxvk {
           D3D9Format SourceFormat,
           D3D9Format TargetFormat) {
     bool sourceSupported = SourceFormat != D3D9Format::Unknown
-                        && (IsSupportedBackBufferFormat(SourceFormat)
-                        || (IsFourCCFormat(SourceFormat) && !IsVendorFormat(SourceFormat)));
+                        && IsSupportedBackBufferFormat(SourceFormat);
     bool targetSupported = TargetFormat == D3D9Format::X1R5G5B5
                         || TargetFormat == D3D9Format::A1R5G5B5
                         || TargetFormat == D3D9Format::R5G6B5
@@ -282,8 +270,6 @@ namespace dxvk {
       return D3DERR_INVALIDCALL;
 
     auto& options = m_parent->GetOptions();
-
-    const VkPhysicalDeviceLimits& limits = m_adapter->deviceProperties().limits;
 
     // TODO: Actually care about what the adapter supports here.
     // ^ For Intel and older cards most likely here.
@@ -543,9 +529,9 @@ namespace dxvk {
     // Max Vertex Blend Matrices
     pCaps->MaxVertexBlendMatrices    = 4;
     // Max Vertex Blend Matrix Index
-    pCaps->MaxVertexBlendMatrixIndex = 0;
+    pCaps->MaxVertexBlendMatrixIndex = 8;
     // Max Point Size
-    pCaps->MaxPointSize              = limits.pointSizeRange[1];
+    pCaps->MaxPointSize              = 256.0f;
     // Max Primitive Count
     pCaps->MaxPrimitiveCount         = 0x00555555;
     // Max Vertex Index
@@ -802,8 +788,7 @@ namespace dxvk {
       // Fix up the D3DFORMAT to match what we are enumerating
       mode.Format = static_cast<D3DFORMAT>(Format);
 
-      if (std::count(m_modes.begin(), m_modes.end(), mode) == 0)
-        m_modes.push_back(mode);
+      m_modes.push_back(mode);
     }
 
     // Sort display modes by width, height and refresh rate,

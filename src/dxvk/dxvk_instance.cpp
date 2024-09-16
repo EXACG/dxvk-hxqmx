@@ -4,25 +4,21 @@
 #include "dxvk_openvr.h"
 #include "dxvk_openxr.h"
 #include "dxvk_platform_exts.h"
-#include "../wsi/wsi_platform.h"
 
 #include <algorithm>
 #include <sstream>
 
 namespace dxvk {
   
-  DxvkInstance::DxvkInstance(DxvkInstanceFlags flags)
-  : DxvkInstance(DxvkInstanceImportInfo(), flags) {
+  DxvkInstance::DxvkInstance()
+  : DxvkInstance(DxvkInstanceImportInfo()) {
 
   }
 
 
-  DxvkInstance::DxvkInstance(const DxvkInstanceImportInfo& args, DxvkInstanceFlags flags) {
+  DxvkInstance::DxvkInstance(const DxvkInstanceImportInfo& args) {
     Logger::info(str::format("Game: ", env::getExeName()));
     Logger::info(str::format("DXVK: ", DXVK_VERSION));
-	Logger::info(str::format("!!!仅做了幻想全明星适配 这是梦羽的修改版本 有异常可以加群 422528959 询问"));
-
-    wsi::init();
 
     m_config = Config::getUserConfig();
     m_config.merge(Config::getAppConfig(env::getExePath()));
@@ -50,7 +46,7 @@ namespace dxvk {
     for (const auto& provider : m_extProviders)
       provider->initInstanceExtensions();
 
-    createInstanceLoader(args, flags);
+    createInstanceLoader(args);
     m_adapters = this->queryAdapters();
 
     for (const auto& provider : m_extProviders)
@@ -68,8 +64,6 @@ namespace dxvk {
   DxvkInstance::~DxvkInstance() {
     if (m_messenger)
       m_vki->vkDestroyDebugUtilsMessengerEXT(m_vki->instance(), m_messenger, nullptr);
-
-    wsi::quit();
   }
   
   
@@ -112,7 +106,7 @@ namespace dxvk {
   }
 
 
-  void DxvkInstance::createInstanceLoader(const DxvkInstanceImportInfo& args, DxvkInstanceFlags flags) {
+  void DxvkInstance::createInstanceLoader(const DxvkInstanceImportInfo& args) {
     DxvkNameList layerList;
     DxvkNameList extensionList;
     DxvkNameSet extensionSet;
@@ -181,10 +175,9 @@ namespace dxvk {
 
       VkApplicationInfo appInfo = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
       appInfo.pApplicationName      = appName.c_str();
-      appInfo.applicationVersion    = flags.raw();
       appInfo.pEngineName           = "DXVK";
-      appInfo.engineVersion         = VK_MAKE_API_VERSION(0, 2, 4, 1);
-      appInfo.apiVersion            = VK_MAKE_API_VERSION(0, 1, 3, 0);
+      appInfo.engineVersion         = VK_MAKE_VERSION(2, 2, 0);
+      appInfo.apiVersion            = VK_MAKE_VERSION(1, 3, 0);
 
       VkInstanceCreateInfo info = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
       info.pApplicationInfo         = &appInfo;
@@ -219,7 +212,6 @@ namespace dxvk {
 
   std::vector<DxvkExt*> DxvkInstance::getExtensionList(DxvkInstanceExtensions& ext, bool withDebug) {
     std::vector<DxvkExt*> result = {{
-      &ext.extSurfaceMaintenance1,
       &ext.khrGetSurfaceCapabilities2,
       &ext.khrSurface,
     }};
@@ -257,7 +249,7 @@ namespace dxvk {
         filterFlags.set(DxvkDeviceFilterFlag::SkipCpuDevices);
     }
 
-    DxvkDeviceFilter filter(filterFlags, m_options);
+    DxvkDeviceFilter filter(filterFlags);
     std::vector<Rc<DxvkAdapter>> result;
 
     uint32_t numDGPU = 0;
@@ -292,16 +284,10 @@ namespace dxvk {
 
         return aRank < bRank;
       });
-
-    if (m_options.hideIntegratedGraphics && numDGPU > 0 && numIGPU > 0) {
-      result.resize(numDGPU);
-      numIGPU = 0;
-    }
-
+    
     if (result.empty()) {
       Logger::warn("DXVK: No adapters found. Please check your "
-                   "device filter settings and Vulkan setup. "
-                   "A Vulkan 1.3 capable driver is required.");
+                   "device filter settings and Vulkan setup.");
     } else if (numDGPU == 1 && numIGPU == 1) {
       result[1]->linkToDGPU(result[0]);
     }

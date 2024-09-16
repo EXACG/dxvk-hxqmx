@@ -1,21 +1,17 @@
-#include "dxvk_platform_exts.h"
-#include "../wsi/wsi_platform.h"
+#include "../dxvk_platform_exts.h"
 
 namespace dxvk {
 
   DxvkPlatformExts DxvkPlatformExts::s_instance;
 
   std::string_view DxvkPlatformExts::getName() {
-    return "Platform WSI";
+    return "Win32 WSI";
   }
 
 
   DxvkNameSet DxvkPlatformExts::getInstanceExtensions() {
-    std::vector<const char *> extensionNames = wsi::getInstanceExtensions();
-
     DxvkNameSet names;
-    for (const char* name : extensionNames)
-      names.add(name);
+    names.add(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 
     return names;
   }

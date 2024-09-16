@@ -16,24 +16,20 @@ namespace dxvk {
 
 
   BOOL D3D9Cursor::ShowCursor(BOOL bShow) {
-    if (likely(m_hCursor != nullptr))
-      ::SetCursor(bShow ? m_hCursor : nullptr);
-    else
-      Logger::debug("D3D9Cursor::ShowCursor: Software cursor not implemented.");
-    
+    ::SetCursor(bShow ? m_hCursor : nullptr);
     return std::exchange(m_visible, bShow);
   }
 
 
   HRESULT D3D9Cursor::SetHardwareCursor(UINT XHotSpot, UINT YHotSpot, const CursorBitmap& bitmap) {
-    CursorMask mask;
+    DWORD mask[32];
     std::memset(mask, ~0, sizeof(mask));
 
     ICONINFO info;
     info.fIcon    = FALSE;
     info.xHotspot = XHotSpot;
     info.yHotspot = YHotSpot;
-    info.hbmMask  = ::CreateBitmap(HardwareCursorWidth, HardwareCursorHeight, 1, 1,  &mask[0]);
+    info.hbmMask  = ::CreateBitmap(HardwareCursorWidth, HardwareCursorHeight, 1, 1,  mask);
     info.hbmColor = ::CreateBitmap(HardwareCursorWidth, HardwareCursorHeight, 1, 32, &bitmap[0]);
 
     if (m_hCursor != nullptr)

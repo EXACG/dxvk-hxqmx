@@ -149,10 +149,6 @@ namespace dxvk {
     : m_mask((x ? 0x1 : 0) | (y ? 0x2 : 0)
            | (z ? 0x4 : 0) | (w ? 0x8 : 0)) { }
     
-    uint32_t raw() const {
-      return m_mask;
-    }
-
     bool operator [] (uint32_t id) const {
       return (m_mask >> id) & 1;
     }
@@ -200,7 +196,7 @@ namespace dxvk {
       return out;
     }
 
-    explicit operator bool () const {
+    operator bool () const {
       return m_mask != 0;
     }
     

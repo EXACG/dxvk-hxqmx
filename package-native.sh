@@ -25,8 +25,6 @@ shift 2
 opt_nopackage=0
 opt_devbuild=0
 opt_buildid=false
-opt_64_only=0
-opt_32_only=0
 
 CC=${CC:="gcc"}
 CXX=${CXX:="g++"}
@@ -43,12 +41,6 @@ while [ $# -gt 0 ]; do
   "--build-id")
     opt_buildid=true
     ;;
-  "--64-only")
-    opt_64_only=1
-    ;;
-  "--32-only")
-    opt_32_only=1
-    ;;
   *)
     echo "Unrecognized option: $1" >&2
     exit 1
@@ -64,14 +56,13 @@ function build_arch {
     opt_strip=--strip
   fi
 
-  CC="$CC -m$1" CXX="$CXX -m$1" meson setup  \
-        --buildtype "release"                \
-        --prefix "$DXVK_BUILD_DIR/usr"       \
-        $opt_strip                           \
-        --bindir "$2"                        \
-        --libdir "$2"                        \
-        -Dbuild_id=$opt_buildid              \
-        --force-fallback-for=libdisplay-info \
+  CC="$CC -m$1" CXX="$CXX -m$1" meson setup \
+        --buildtype "release"               \
+        --prefix "$DXVK_BUILD_DIR/usr"      \
+        $opt_strip                          \
+        --bindir "$2"                       \
+        --libdir "$2"                       \
+        -Dbuild_id=$opt_buildid             \
         "$DXVK_BUILD_DIR/build.$1"
 
   cd "$DXVK_BUILD_DIR/build.$1"
@@ -89,12 +80,8 @@ function package {
   rm -R "dxvk-native-$DXVK_VERSION"
 }
 
-if [ $opt_32_only -eq 0 ]; then
-  build_arch 64 lib
-fi
-if [ $opt_64_only -eq 0 ]; then
-  build_arch 32 lib32
-fi
+build_arch 64 lib
+build_arch 32 lib32
 
 if [ $opt_nopackage -eq 0 ]; then
   package

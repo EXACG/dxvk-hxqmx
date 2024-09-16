@@ -119,7 +119,7 @@ namespace dxvk {
 
     { std::unique_lock<dxvk::mutex> lock(m_mutex);
       seq = ++m_chunksDispatched;
-      m_chunksQueued.push_back(std::move(chunk));
+      m_chunksQueued.push(std::move(chunk));
     }
     
     m_condOnAdd.notify_one();
@@ -131,20 +131,15 @@ namespace dxvk {
     // Avoid locking if we know the sync is a no-op, may
     // reduce overhead if this is being called frequently
     if (seq > m_chunksExecuted.load(std::memory_order_acquire)) {
-      // We don't need to lock the queue here, if synchronization
-      // happens while another thread is submitting then there is
-      // an inherent race anyway
+      std::unique_lock<dxvk::mutex> lock(m_mutex);
+
       if (seq == SynchronizeAll)
         seq = m_chunksDispatched.load();
 
       auto t0 = dxvk::high_resolution_clock::now();
-
-      { std::unique_lock<dxvk::mutex> lock(m_counterMutex);
-        m_condOnSync.wait(lock, [this, seq] {
-          return m_chunksExecuted.load() >= seq;
-        });
-      }
-
+      m_condOnSync.wait(lock, [this, seq] {
+        return m_chunksExecuted.load() >= seq;
+      });
       auto t1 = dxvk::high_resolution_clock::now();
       auto ticks = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
 
@@ -157,41 +152,35 @@ namespace dxvk {
   void DxvkCsThread::threadFunc() {
     env::setThreadName("dxvk-cs");
 
-    // Local chunk queue, we use two queues and swap between
-    // them in order to potentially reduce lock contention.
-    std::vector<DxvkCsChunkRef> chunks;
+    DxvkCsChunkRef chunk;
 
     try {
       while (!m_stopped.load()) {
         { std::unique_lock<dxvk::mutex> lock(m_mutex);
-
-          m_condOnAdd.wait(lock, [this] {
-            return (!m_chunksQueued.empty())
-                || (m_stopped.load());
-          });
-
-          std::swap(chunks, m_chunksQueued);
-        }
-
-        for (auto& chunk : chunks) {
-          m_context->addStatCtr(DxvkStatCounter::CsChunkCount, 1);
-
-          chunk->executeAll(m_context.ptr());
-
-          // Use a separate mutex for the chunk counter, this
-          // will only ever be contested if synchronization is
-          // actually necessary.
-          { std::unique_lock<dxvk::mutex> lock(m_counterMutex);
-            m_chunksExecuted += 1;
+          if (chunk) {
+            m_chunksExecuted++;
             m_condOnSync.notify_one();
+            
+            chunk = DxvkCsChunkRef();
           }
-
-          // Explicitly free chunk here to release
-          // references to any resources held by it
-          chunk = DxvkCsChunkRef();
+          
+          if (m_chunksQueued.size() == 0) {
+            m_condOnAdd.wait(lock, [this] {
+              return (m_chunksQueued.size() != 0)
+                  || (m_stopped.load());
+            });
+          }
+          
+          if (m_chunksQueued.size() != 0) {
+            chunk = std::move(m_chunksQueued.front());
+            m_chunksQueued.pop();
+          }
         }
-
-        chunks.clear();
+        
+        if (chunk) {
+          m_context->addStatCtr(DxvkStatCounter::CsChunkCount, 1);
+          chunk->executeAll(m_context.ptr());
+        }
       }
     } catch (const DxvkError& e) {
       Logger::err("Exception on CS thread!");

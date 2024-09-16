@@ -1,8 +1,6 @@
-#if defined(DXVK_WSI_GLFW)
-
 #include "../wsi_window.h"
 
-#include "native/wsi/native_glfw.h"
+#include "native/wsi/native_wsi.h"
 #include "wsi_platform_glfw.h"
 
 #include "../../util/util_string.h"
@@ -14,7 +12,7 @@
 
 namespace dxvk::wsi {
 
-  void GlfwWsiDriver::getWindowSize(
+  void getWindowSize(
       HWND hWindow,
       uint32_t* pWidth,
       uint32_t* pHeight) {
@@ -31,7 +29,7 @@ namespace dxvk::wsi {
   }
 
 
-  void GlfwWsiDriver::resizeWindow(
+  void resizeWindow(
       HWND hWindow,
       DxvkWindowState* pState,
       uint32_t Width,
@@ -42,7 +40,7 @@ namespace dxvk::wsi {
   }
 
 
-  bool GlfwWsiDriver::setWindowMode(
+  bool setWindowMode(
       HMONITOR hMonitor,
       HWND hWindow,
       const WsiMode& pMode) {
@@ -69,7 +67,7 @@ namespace dxvk::wsi {
     return true;
   }
 
-  bool GlfwWsiDriver::enterFullscreenMode(
+  bool enterFullscreenMode(
       HMONITOR hMonitor,
       HWND hWindow,
       DxvkWindowState* pState,
@@ -91,7 +89,7 @@ namespace dxvk::wsi {
   }
 
 
-  bool GlfwWsiDriver::leaveFullscreenMode(
+  bool leaveFullscreenMode(
       HWND hWindow,
       DxvkWindowState* pState,
       bool             restoreCoordinates) {
@@ -105,13 +103,13 @@ namespace dxvk::wsi {
   }
 
 
-  bool GlfwWsiDriver::restoreDisplayMode() {
+  bool restoreDisplayMode() {
     // Don't need to do anything with GLFW here.
     return true;
   }
 
 
-  HMONITOR GlfwWsiDriver::getWindowMonitor(HWND hWindow) {
+  HMONITOR getWindowMonitor(HWND hWindow) {
     // TODO: implement this with glfwGetWindowMonitor 
     //  (or maybe not? glfwGetWindowMonitor only seems to reference *fullscreen* windows)
     // GLFWwindow* window = fromHwnd(hWindow);
@@ -121,19 +119,19 @@ namespace dxvk::wsi {
   }
 
 
-  bool GlfwWsiDriver::isWindow(HWND hWindow) {
+  bool isWindow(HWND hWindow) {
     GLFWwindow* window = fromHwnd(hWindow);
     return window != nullptr;
   }
 
-  void GlfwWsiDriver::updateFullscreenWindow(
+  void updateFullscreenWindow(
       HMONITOR hMonitor,
       HWND     hWindow,
       bool     forceTopmost) {
     // Don't need to do anything with GLFW here.
   }
 
-  VkResult GlfwWsiDriver::createSurface(
+  VkResult createSurface(
       HWND hWindow,
       PFN_vkGetInstanceProcAddr pfnVkGetInstanceProcAddr,
       VkInstance                instance,
@@ -144,5 +142,3 @@ namespace dxvk::wsi {
   }
 
 }
-
-#endif

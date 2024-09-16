@@ -13,7 +13,7 @@ namespace dxvk {
   class D3D11Device;
   class D3D11DXGIDevice;
 
-  class D3D11SwapChain : public ComObject<IDXGIVkSwapChain2> {
+  class D3D11SwapChain : public ComObject<IDXGIVkSwapChain> {
     constexpr static uint32_t DefaultFrameLatency = 1;
   public:
 
@@ -80,15 +80,6 @@ namespace dxvk {
     HRESULT STDMETHODCALLTYPE SetHDRMetaData(
       const DXGI_VK_HDR_METADATA*     pMetaData);
 
-    void STDMETHODCALLTYPE GetLastPresentCount(
-            UINT64*                   pLastPresentCount);
-
-    void STDMETHODCALLTYPE GetFrameStatistics(
-            DXGI_VK_FRAME_STATISTICS* pFrameStatistics);
-
-    void STDMETHODCALLTYPE SetTargetFrameRate(
-            double                    FrameRate);
-
   private:
 
     enum BindingIds : uint32_t {
@@ -106,7 +97,7 @@ namespace dxvk {
     Rc<DxvkDevice>            m_device;
     Rc<DxvkContext>           m_context;
 
-    Rc<Presenter>             m_presenter;
+    Rc<vk::Presenter>         m_presenter;
 
     Rc<DxvkImage>             m_swapImage;
     Rc<DxvkImageView>         m_swapImageView;
@@ -119,34 +110,33 @@ namespace dxvk {
 
     std::vector<Rc<DxvkImageView>> m_imageViews;
 
-    uint64_t                  m_frameId      = DXGI_MAX_SWAP_CHAIN_BUFFERS;
-    uint32_t                  m_frameLatency = DefaultFrameLatency;
-    uint32_t                  m_frameLatencyCap = 0;
-    HANDLE                    m_frameLatencyEvent = nullptr;
-    Rc<sync::CallbackFence>   m_frameLatencySignal;
+    uint64_t                m_frameId      = DXGI_MAX_SWAP_CHAIN_BUFFERS;
+    uint32_t                m_frameLatency = DefaultFrameLatency;
+    uint32_t                m_frameLatencyCap = 0;
+    HANDLE                  m_frameLatencyEvent = nullptr;
+    Rc<sync::CallbackFence> m_frameLatencySignal;
 
-    bool                      m_dirty = true;
+    HANDLE                  m_processHandle = nullptr;
 
-    VkColorSpaceKHR           m_colorspace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    bool                    m_dirty = true;
+    bool                    m_vsync = true;
+
+    VkColorSpaceKHR         m_colorspace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
     std::optional<VkHdrMetadataEXT> m_hdrMetadata;
-    bool                      m_dirtyHdrMetadata = true;
-
-    double                    m_targetFrameRate = 0.0;
-
-    dxvk::mutex               m_frameStatisticsLock;
-    DXGI_VK_FRAME_STATISTICS  m_frameStatistics = { };
+    bool m_dirtyHdrMetadata = true;
 
     HRESULT PresentImage(UINT SyncInterval);
 
     void SubmitPresent(
             D3D11ImmediateContext*  pContext,
-      const PresenterSync&          Sync,
-            uint32_t                Repeat);
+      const vk::PresenterSync&      Sync,
+            uint32_t                FrameId);
 
     void SynchronizePresent();
 
-    void RecreateSwapChain();
+    void RecreateSwapChain(
+            BOOL                      Vsync);
 
     void CreateFrameLatencyEvent();
 
@@ -171,6 +161,10 @@ namespace dxvk {
     uint32_t PickFormats(
             DXGI_FORMAT               Format,
             VkSurfaceFormatKHR*       pDstFormats);
+    
+    uint32_t PickPresentModes(
+            BOOL                      Vsync,
+            VkPresentModeKHR*         pDstModes);
     
     uint32_t PickImageCount(
             UINT                      Preferred);

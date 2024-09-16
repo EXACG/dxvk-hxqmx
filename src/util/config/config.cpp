@@ -13,45 +13,28 @@
 
 namespace dxvk {
 
-  using ProfileList = std::vector<std::pair<const char*, Config>>;
-
-
-  const static ProfileList g_profiles = {{
-    /* 幻想全明星专用 修复黑屏                 */
+  const static std::vector<std::pair<const char*, Config>> g_appDefaults = {{
+	  /* 幻想全明星专用 修复黑屏                 */
     { R"(\\ACClient\.exe$)", {{
+      { "d3d9.enableDialogMode",        "True" },
+	  { "d3d9.maxFrameRate",        "300" },
+    }} },
+    { R"(\\NvRemixLauncher32\.exe$)", {{
+      { "d3d9.enableDialogMode",        "True" },
+	  { "d3d9.maxFrameRate",        "300" },
+    }} },
+    { R"(\\NvRemixBridge\.exe$)", {{
       { "d3d9.enableDialogMode",        "True" },
 	  { "d3d9.maxFrameRate",        "300" },
     }} },
   }};
 
 
-  const static ProfileList g_deckProfiles = {{
-    /* Fallout 4: Defaults to 45 FPS on OLED, but also breaks above 60 FPS */
-    { R"(\\Fallout4\.exe$)", {{
-      { "dxgi.syncInterval",                "1" },
-      { "dxgi.maxFrameRate",                "60" },
-    }} },
-  }};
-
-
-  const Config* findProfile(const ProfileList& profiles, const std::string& appName) {
-    auto appConfig = std::find_if(profiles.begin(), profiles.end(),
-      [&appName] (const std::pair<const char*, Config>& pair) {
-        std::regex expr(pair.first, std::regex::extended | std::regex::icase);
-        return std::regex_search(appName, expr);
-      });
-
-    return appConfig != profiles.end()
-      ? &appConfig->second
-      : nullptr;
-  }
-
-
   static bool isWhitespace(char ch) {
     return ch == ' ' || ch == '\x9' || ch == '\r';
   }
 
-
+  
   static bool isValidKeyChar(char ch) {
     return (ch >= '0' && ch <= '9')
         || (ch >= 'A' && ch <= 'Z')
@@ -88,12 +71,12 @@ namespace dxvk {
 
       while (n < e)
         key << line[n++];
-
+      
       ctx.active = key.str() == env::getExeName();
     } else {
       while (n < line.size() && isValidKeyChar(line[n]))
         key << line[n++];
-
+      
       // Check whether the next char is a '='
       n = skipWhitespace(line, n);
       if (n >= line.size() || line[n] != '=')
@@ -113,7 +96,7 @@ namespace dxvk {
         } else
           value << line[n++];
       }
-
+      
       if (ctx.active)
         config.setOption(key.str(), value.str());
     }
@@ -173,7 +156,7 @@ namespace dxvk {
           int32_t&      result) {
     if (value.size() == 0)
       return false;
-
+    
     // Parse sign, don't allow '+'
     int32_t sign = 1;
     size_t start = 0;
@@ -189,7 +172,7 @@ namespace dxvk {
     for (size_t i = start; i < value.size(); i++) {
       if (value[i] < '0' || value[i] > '9')
         return false;
-
+      
       intval *= 10;
       intval += value[i] - '0';
     }
@@ -198,8 +181,8 @@ namespace dxvk {
     result = sign * intval;
     return true;
   }
-
-
+  
+  
   bool Config::parseOptionValue(
     const std::string&  value,
           float&        result) {
@@ -296,22 +279,20 @@ namespace dxvk {
 
 
   Config Config::getAppConfig(const std::string& appName) {
-    const Config* config = nullptr;
-
-    if (env::getEnvVar("SteamDeck") == "1")
-      config = findProfile(g_deckProfiles, appName);
-
-    if (!config)
-      config = findProfile(g_profiles, appName);
-
-    if (config) {
+    auto appConfig = std::find_if(g_appDefaults.begin(), g_appDefaults.end(),
+      [&appName] (const std::pair<const char*, Config>& pair) {
+        std::regex expr(pair.first, std::regex::extended | std::regex::icase);
+        return std::regex_search(appName, expr);
+      });
+    
+    if (appConfig != g_appDefaults.end()) {
       // Inform the user that we loaded a default config
       Logger::info(str::format("Found built-in config:"));
 
-      for (auto& pair : config->m_options)
+      for (auto& pair : appConfig->second.m_options)
         Logger::info(str::format("  ", pair.first, " = ", pair.second));
 
-      return *config;
+      return appConfig->second;
     }
 
     return Config();
@@ -323,42 +304,30 @@ namespace dxvk {
 
     // Load either $DXVK_CONFIG_FILE or $PWD/dxvk.conf
     std::string filePath = env::getEnvVar("DXVK_CONFIG_FILE");
-    std::string confLine = env::getEnvVar("DXVK_CONFIG");
 
     if (filePath == "")
       filePath = "dxvk.conf";
-
+    
     // Open the file if it exists
     std::ifstream stream(str::topath(filePath.c_str()).c_str());
 
-    if (!stream && confLine.empty())
+    if (!stream)
       return config;
+    
+    // Inform the user that we loaded a file, might
+    // help when debugging configuration issues
+    Logger::info(str::format("Found config file: ", filePath));
 
     // Initialize parser context
     ConfigContext ctx;
     ctx.active = true;
 
-    if (stream) {
-      // Inform the user that we loaded a file, might
-      // help when debugging configuration issues
-      Logger::info(str::format("加载配置文件: ", filePath));
+    // Parse the file line by line
+    std::string line;
 
-      // Parse the file line by line
-      std::string line;
-
-      while (std::getline(stream, line))
-        parseUserConfigLine(config, ctx, line);
-    }
-
-    if (!confLine.empty()) {
-      // Inform the user that we parsing config from environment, might
-      // help when debugging configuration issues
-      Logger::info(str::format("Found config env: ", confLine));
-
-      for(auto l : str::split(confLine, ";"))
-        parseUserConfigLine(config, ctx, std::string(l.data(), l.size()));
-    }
-
+    while (std::getline(stream, line))
+      parseUserConfigLine(config, ctx, line);
+    
     return config;
   }
 

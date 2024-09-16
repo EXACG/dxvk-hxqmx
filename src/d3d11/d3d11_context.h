@@ -1130,7 +1130,7 @@ namespace dxvk {
       if (likely(pBuffer != nullptr))
         bufferSize = static_cast<D3D11Buffer*>(pBuffer)->Desc()->ByteWidth;
 
-      return uint64_t(bufferSize) >= uint64_t(Offset) + uint64_t(Size);
+      return bufferSize >= Offset + Size;
     }
 
   private:

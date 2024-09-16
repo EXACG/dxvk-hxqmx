@@ -1,7 +1,0 @@
-{
-  global:
-    Direct3DCreate8;
-
-  local:
-    *;
-};

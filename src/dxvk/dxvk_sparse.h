@@ -239,7 +239,7 @@ namespace dxvk {
       return m_page != other.m_page;
     }
 
-    explicit operator bool () const {
+    operator bool () const {
       return m_page != nullptr;
     }
 
@@ -341,7 +341,7 @@ namespace dxvk {
      * \brief Checks whether page table is defined
      * \returns \c true if the page table is defined
      */
-    explicit operator bool () const {
+    operator bool () const {
       return m_buffer || m_image;
     }
 
@@ -730,10 +730,6 @@ namespace dxvk {
     static bool tryMergeMemoryBind(
             VkSparseMemoryBind&               oldBind,
       const VkSparseMemoryBind&               newBind);
-
-    static bool tryMergeImageBind(
-            std::pair<DxvkSparseImageBindKey, DxvkSparsePageHandle>& oldBind,
-      const std::pair<DxvkSparseImageBindKey, DxvkSparsePageHandle>& newBind);
 
     void processBufferBinds(
             DxvkSparseBufferBindArrays&       buffer);
