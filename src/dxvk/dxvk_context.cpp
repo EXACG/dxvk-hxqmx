@@ -873,10 +873,12 @@ namespace dxvk {
     viewInfo.format = format;
     viewInfo.rangeOffset = dstBufferOffset;
     viewInfo.rangeLength = dstBufferSlice.length;
+    viewInfo.usage = VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
     Rc<DxvkBufferView> dstView = m_device->createBufferView(dstBuffer, viewInfo);
 
     viewInfo.rangeOffset = srcBufferOffset;
     viewInfo.rangeLength = srcBufferSlice.length;
+    viewInfo.usage = VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
     Rc<DxvkBufferView> srcView;
 
     if (srcBuffer == dstBuffer
@@ -1066,11 +1068,13 @@ namespace dxvk {
     tmpViewInfoD.format      = dataFormatD;
     tmpViewInfoD.rangeOffset = 0;
     tmpViewInfoD.rangeLength = dataSizeD;
+    tmpViewInfoD.usage       = VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
 
     DxvkBufferViewCreateInfo tmpViewInfoS;
     tmpViewInfoS.format      = dataFormatS;
     tmpViewInfoS.rangeOffset = dataSizeD;
     tmpViewInfoS.rangeLength = dataSizeS;
+    tmpViewInfoS.usage       = VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
 
     auto tmpBufferViewD = m_device->createBufferView(tmpBuffer, tmpViewInfoD);
     auto tmpBufferViewS = m_device->createBufferView(tmpBuffer, tmpViewInfoS);
@@ -1212,17 +1216,6 @@ namespace dxvk {
     this->copySparsePages<false>(
       dstResource, pageCount, pages,
       srcBuffer, srcOffset);
-  }
-
-
-  void DxvkContext::discardBuffer(
-    const Rc<DxvkBuffer>&       buffer) {
-    if ((buffer->memFlags() & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
-     || (buffer->info().flags & VK_BUFFER_CREATE_SPARSE_BINDING_BIT))
-      return;
-
-    if (m_execBarriers.isBufferDirty(buffer->getSliceHandle(), DxvkAccess::Write))
-      this->invalidateBuffer(buffer, buffer->allocSlice());
   }
 
 
@@ -6380,6 +6373,10 @@ namespace dxvk {
 
     // Don't discard imported buffers
     if (buffer->isForeign())
+      return false;
+
+    // Don't discard buffers that need a stable device address
+    if (buffer->info().usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
       return false;
 
     // Suspend the current render pass if transform feedback is active prior to
