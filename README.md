@@ -56,12 +56,15 @@ The `DXVK_HUD` environment variable controls a HUD which can display the framera
 - `pipelines`: Shows the total number of graphics and compute pipelines.
 - `descriptors`: Shows the number of descriptor pools and descriptor sets.
 - `memory`: Shows the amount of device memory allocated and used.
+- `allocations`: Shows detailed memory chunk suballocation info.
 - `gpuload`: Shows estimated GPU load. May be inaccurate.
 - `version`: Shows DXVK version.
 - `api`: Shows the D3D feature level used by the application.
 - `cs`: Shows worker thread statistics.
 - `compiler`: Shows shader compiler activity
 - `samplers`: Shows the current number of sampler pairs used *[D3D9 Only]*
+- `ffshaders`: Shows the current number of shaders generated from fixed function state *[D3D9 Only]*
+- `swvp`: Shows whether or not the device is running in software vertex processing mode *[D3D9 Only]*
 - `scale=x`: Scales the HUD by a factor of `x` (e.g. `1.5`)
 - `opacity=y`: Adjusts the HUD opacity by a factor of `y` (e.g. `0.5`, `1.0` being fully opaque).
 

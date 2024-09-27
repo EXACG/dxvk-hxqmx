@@ -22,6 +22,13 @@ namespace dxvk {
       { "d3d9.enableDialogMode",        "True" },
 	  { "d3d9.maxFrameRate",        "300" },
     }} },
+    /* Rayman 3: Hoodlum Havoc                    *
+     * Missing geometry and textures without      *
+     * legacy DISCARD behavior                    */
+    { R"(\\Rayman3\.exe$)", {{
+      { "d3d9.allowDirectBufferMapping",   "False" },
+      { "d3d8.forceLegacyDiscard",          "True" },
+    }} },
   }};
 
 

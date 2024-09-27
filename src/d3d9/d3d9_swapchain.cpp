@@ -983,12 +983,9 @@ namespace dxvk {
     for (uint32_t i = 0; i < info.imageCount; i++) {
       VkImage imageHandle = m_wctx->presenter->getImage(i).image;
       
-      Rc<DxvkImage> image = new DxvkImage(
-        m_device.ptr(), imageInfo, imageHandle,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-      m_wctx->imageViews[i] = new DxvkImageView(
-        m_device->vkd(), image, viewInfo);
+      Rc<DxvkImage> image = m_device->importImage(imageInfo,
+        imageHandle, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+      m_wctx->imageViews[i] = image->createView(viewInfo);
     }
   }
 
@@ -1101,6 +1098,7 @@ namespace dxvk {
       m_hud->addItem<hud::HudClientApiItem>("api", 1, GetApiName());
       m_hud->addItem<hud::HudSamplerCount>("samplers", -1, m_parent);
       m_hud->addItem<hud::HudFixedFunctionShaders>("ffshaders", -1, m_parent);
+      m_hud->addItem<hud::HudSWVPState>("swvp", -1, m_parent);
 
 #ifdef D3D9_ALLOW_UNMAPPING
       m_hud->addItem<hud::HudTextureMemory>("memory", -1, m_parent);

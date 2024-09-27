@@ -247,7 +247,7 @@ namespace dxvk {
         m_rc[slot].imageView = nullptr;
 
       if (view != nullptr) {
-        m_rc[slot].bufferSlice = view->slice();
+        m_rc[slot].bufferSlice = DxvkBufferSlice(view);
         m_rc[slot].bufferView = std::move(view);
       } else {
         m_rc[slot].bufferSlice = DxvkBufferSlice();
@@ -959,11 +959,24 @@ namespace dxvk {
      * \warning If the buffer is used by another context,
      * invalidating it will result in undefined behaviour.
      * \param [in] buffer The buffer to invalidate
-     * \param [in] slice New buffer slice handle
+     * \param [in] slice New buffer slice
      */
     void invalidateBuffer(
       const Rc<DxvkBuffer>&           buffer,
-      const DxvkBufferSliceHandle&    slice);
+            Rc<DxvkResourceAllocation>&& slice);
+
+    /**
+     * \brief Invalidates image content
+     *
+     * Replaces the backing storage of an image.
+     * \warning If the image is used by another context,
+     * invalidating it will result in undefined behaviour.
+     * \param [in] buffer The buffer to invalidate
+     * \param [in] slice New buffer slice
+     */
+    void invalidateImage(
+      const Rc<DxvkImage>&            image,
+            Rc<DxvkResourceAllocation>&& slice);
     
     /**
      * \brief Updates push constants
