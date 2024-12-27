@@ -28,6 +28,14 @@ namespace dxvk {
   
   struct D3D9ClipPlane {
     float coeff[4] = {};
+
+    bool operator == (const D3D9ClipPlane& other) {
+      return std::memcmp(this, &other, sizeof(D3D9ClipPlane)) == 0;
+    }
+
+    bool operator != (const D3D9ClipPlane& other) {
+      return !this->operator == (other);
+    }
   };
 
   struct D3D9RenderStateInfo {
@@ -225,6 +233,33 @@ namespace dxvk {
     T& get() { return m_data; }
   private:
     T m_data;
+  };
+
+  struct D3D9SamplerInfo {
+    D3D9SamplerInfo() = default;
+
+    D3D9SamplerInfo(const std::array<DWORD, SamplerStateCount>& state)
+    : addressU(D3DTEXTUREADDRESS(state[D3DSAMP_ADDRESSU]))
+    , addressV(D3DTEXTUREADDRESS(state[D3DSAMP_ADDRESSV]))
+    , addressW(D3DTEXTUREADDRESS(state[D3DSAMP_ADDRESSW]))
+    , borderColor(D3DCOLOR(state[D3DSAMP_BORDERCOLOR]))
+    , magFilter(D3DTEXTUREFILTERTYPE(state[D3DSAMP_MAGFILTER]))
+    , minFilter(D3DTEXTUREFILTERTYPE(state[D3DSAMP_MINFILTER]))
+    , mipFilter(D3DTEXTUREFILTERTYPE(state[D3DSAMP_MIPFILTER]))
+    , mipLodBias(bit::cast<float>(state[D3DSAMP_MIPMAPLODBIAS]))
+    , maxMipLevel(state[D3DSAMP_MAXMIPLEVEL])
+    , maxAnisotropy(state[D3DSAMP_MAXANISOTROPY]) { }
+
+    D3DTEXTUREADDRESS addressU;
+    D3DTEXTUREADDRESS addressV;
+    D3DTEXTUREADDRESS addressW;
+    D3DCOLOR borderColor;
+    D3DTEXTUREFILTERTYPE magFilter;
+    D3DTEXTUREFILTERTYPE minFilter;
+    D3DTEXTUREFILTERTYPE mipFilter;
+    float mipLodBias;
+    DWORD maxMipLevel;
+    DWORD maxAnisotropy;
   };
 
   template <template <typename T> typename ItemType>

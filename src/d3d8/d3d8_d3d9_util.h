@@ -29,36 +29,44 @@ namespace dxvk {
 
 
     // Remove D3D9-specific caps:
-    pCaps8->Caps2             &= ~D3DCAPS2_CANAUTOGENMIPMAP;
+    pCaps8->Caps2                 &= ~D3DCAPS2_CANAUTOGENMIPMAP;
 
-    pCaps8->Caps3             &= ~D3DCAPS3_LINEAR_TO_SRGB_PRESENTATION
-                               & ~D3DCAPS3_COPY_TO_VIDMEM
-                               & ~D3DCAPS3_COPY_TO_SYSTEMMEM;
+    pCaps8->Caps3                 &= ~D3DCAPS3_LINEAR_TO_SRGB_PRESENTATION
+                                   & ~D3DCAPS3_COPY_TO_VIDMEM
+                                   & ~D3DCAPS3_COPY_TO_SYSTEMMEM;
 
-    pCaps8->PrimitiveMiscCaps &= ~D3DPMISCCAPS_INDEPENDENTWRITEMASKS
-                               & ~D3DPMISCCAPS_PERSTAGECONSTANT
-                               & ~D3DPMISCCAPS_FOGANDSPECULARALPHA
-                               & ~D3DPMISCCAPS_SEPARATEALPHABLEND
-                               & ~D3DPMISCCAPS_MRTINDEPENDENTBITDEPTHS
-                               & ~D3DPMISCCAPS_MRTPOSTPIXELSHADERBLENDING
-                               & ~D3DPMISCCAPS_FOGVERTEXCLAMPED
-                               & ~D3DPMISCCAPS_POSTBLENDSRGBCONVERT;
+    pCaps8->PrimitiveMiscCaps     &= ~D3DPMISCCAPS_INDEPENDENTWRITEMASKS
+                                   & ~D3DPMISCCAPS_PERSTAGECONSTANT
+                                   & ~D3DPMISCCAPS_FOGANDSPECULARALPHA
+                                   & ~D3DPMISCCAPS_SEPARATEALPHABLEND
+                                   & ~D3DPMISCCAPS_MRTINDEPENDENTBITDEPTHS
+                                   & ~D3DPMISCCAPS_MRTPOSTPIXELSHADERBLENDING
+                                   & ~D3DPMISCCAPS_FOGVERTEXCLAMPED
+                                   & ~D3DPMISCCAPS_POSTBLENDSRGBCONVERT;
 
-    pCaps8->RasterCaps        &= ~D3DPRASTERCAPS_SCISSORTEST
-                               & ~D3DPRASTERCAPS_SLOPESCALEDEPTHBIAS
-                               & ~D3DPRASTERCAPS_DEPTHBIAS
-                               & ~D3DPRASTERCAPS_MULTISAMPLE_TOGGLE;
+    pCaps8->RasterCaps            &= ~D3DPRASTERCAPS_SCISSORTEST
+                                   & ~D3DPRASTERCAPS_SLOPESCALEDEPTHBIAS
+                                   & ~D3DPRASTERCAPS_DEPTHBIAS
+                                   & ~D3DPRASTERCAPS_MULTISAMPLE_TOGGLE;
 
-    pCaps8->SrcBlendCaps      &= ~D3DPBLENDCAPS_INVSRCCOLOR2
-                               & ~D3DPBLENDCAPS_SRCCOLOR2;
+    pCaps8->SrcBlendCaps          &= ~D3DPBLENDCAPS_BLENDFACTOR;
 
-    pCaps8->LineCaps          &= ~D3DLINECAPS_ANTIALIAS;
+    pCaps8->DestBlendCaps         &= ~D3DPBLENDCAPS_BLENDFACTOR;
 
-    pCaps8->StencilCaps       &= ~D3DSTENCILCAPS_TWOSIDED;
+    pCaps8->LineCaps              &= ~D3DLINECAPS_ANTIALIAS;
+
+    pCaps8->StencilCaps           &= ~D3DSTENCILCAPS_TWOSIDED;
+
+    pCaps8->VertexProcessingCaps  &= ~D3DVTXPCAPS_TEXGEN_SPHEREMAP;
   }
 
   // (9<-8) D3DD3DPRESENT_PARAMETERS: Returns D3D9's params given an input for D3D8
-  inline d3d9::D3DPRESENT_PARAMETERS ConvertPresentParameters9(const D3DPRESENT_PARAMETERS* pParams) {
+  inline d3d9::D3DPRESENT_PARAMETERS ConvertPresentParameters9(D3DPRESENT_PARAMETERS* pParams) {
+    // A 0 back buffer count needs to be corrected and made visible to the D3D8 application as well
+    pParams->BackBufferCount = std::max(pParams->BackBufferCount, 1u);
+
+    if (pParams->BackBufferFormat == D3DFMT_UNKNOWN)
+      pParams->BackBufferFormat = D3DFMT_X8R8G8B8;
 
     d3d9::D3DPRESENT_PARAMETERS params;
     params.BackBufferWidth = pParams->BackBufferWidth;
@@ -69,7 +77,6 @@ namespace dxvk {
     params.MultiSampleType = d3d9::D3DMULTISAMPLE_TYPE(pParams->MultiSampleType);
     params.MultiSampleQuality = 0; // (D3D8: no MultiSampleQuality), TODO: get a value for this
 
-
     UINT PresentationInterval = pParams->FullScreen_PresentationInterval;
 
     if (pParams->Windowed) {
@@ -77,7 +84,7 @@ namespace dxvk {
       if (unlikely(PresentationInterval != D3DPRESENT_INTERVAL_DEFAULT)) {
         // TODO: what does dx8 do if windowed app sets FullScreen_PresentationInterval?
         Logger::warn(str::format(
-          "D3D8 Application is windowed yet requested FullScreen_PresentationInterval ", PresentationInterval,
+          "D3D8: Application is windowed yet requested FullScreen_PresentationInterval ", PresentationInterval,
           " (should be D3DPRESENT_INTERVAL_DEFAULT). This will be ignored."));
       }
 
@@ -147,7 +154,7 @@ namespace dxvk {
   }
 
   // If this D3DTEXTURESTAGESTATETYPE has been remapped to a d3d9::D3DSAMPLERSTATETYPE
-  // it will be returned, otherwise returns -1
+  // it will be returned, otherwise returns -1u
   inline d3d9::D3DSAMPLERSTATETYPE GetSamplerStateType9(const D3DTEXTURESTAGESTATETYPE StageType) {
     switch (StageType) {
       // 13-21:
@@ -158,11 +165,11 @@ namespace dxvk {
       case D3DTSS_MINFILTER:      return d3d9::D3DSAMP_MINFILTER;
       case D3DTSS_MIPFILTER:      return d3d9::D3DSAMP_MIPFILTER;
       case D3DTSS_MIPMAPLODBIAS:  return d3d9::D3DSAMP_MIPMAPLODBIAS;
-      case D3DTSS_MAXMIPLEVEL:    return d3d9::D3DSAMP_MIPFILTER;
+      case D3DTSS_MAXMIPLEVEL:    return d3d9::D3DSAMP_MAXMIPLEVEL;
       case D3DTSS_MAXANISOTROPY:  return d3d9::D3DSAMP_MAXANISOTROPY;
       // 25:
       case D3DTSS_ADDRESSW:       return d3d9::D3DSAMP_ADDRESSW;
-      default:                    return d3d9::D3DSAMPLERSTATETYPE(-1);
+      default:                    return d3d9::D3DSAMPLERSTATETYPE(-1u);
     }
   }
 }

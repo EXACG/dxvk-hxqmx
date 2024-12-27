@@ -19,14 +19,13 @@ namespace dxvk {
   const static ProfileList g_profiles = {{
     /* 幻想全明星专用 修复黑屏                 */
     { R"(\\ACClient\.exe$)", {{
-      { "d3d9.enableDialogMode",        "True" },
 	  { "d3d9.maxFrameRate",        "300" },
     }} },
     /* Rayman 3: Hoodlum Havoc                    *
      * Missing geometry and textures without      *
      * legacy DISCARD behavior                    */
     { R"(\\Rayman3\.exe$)", {{
-      { "d3d9.allowDirectBufferMapping",   "False" },
+      { "d3d9.maxFrameRate",                  "60" },
       { "d3d8.forceLegacyDiscard",          "True" },
     }} },
   }};
@@ -358,6 +357,8 @@ namespace dxvk {
     }
 
     if (!confLine.empty()) {
+      ctx.active = true;
+
       // Inform the user that we parsing config from environment, might
       // help when debugging configuration issues
       Logger::info(str::format("Found config env: ", confLine));

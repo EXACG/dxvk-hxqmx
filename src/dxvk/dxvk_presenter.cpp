@@ -48,10 +48,13 @@ namespace dxvk {
 
 
   VkResult Presenter::acquireNextImage(PresenterSync& sync, uint32_t& index) {
-    sync = m_semaphores.at(m_frameIndex);
+    PresenterSync& semaphores = m_semaphores.at(m_frameIndex);
+    sync = semaphores;
 
     // Don't acquire more than one image at a time
     if (m_acquireStatus == VK_NOT_READY) {
+      waitForSwapchainFence(semaphores);
+
       m_acquireStatus = m_vkd->vkAcquireNextImageKHR(m_vkd->device(),
         m_swapchain, std::numeric_limits<uint64_t>::max(),
         sync.acquire, VK_NULL_HANDLE, &m_imageIndex);
@@ -68,11 +71,15 @@ namespace dxvk {
   VkResult Presenter::presentImage(
           VkPresentModeKHR  mode,
           uint64_t          frameId) {
-    PresenterSync sync = m_semaphores.at(m_frameIndex);
+    PresenterSync& currSync = m_semaphores.at(m_frameIndex);
 
     VkPresentIdKHR presentId = { VK_STRUCTURE_TYPE_PRESENT_ID_KHR };
     presentId.swapchainCount = 1;
     presentId.pPresentIds   = &frameId;
+
+    VkSwapchainPresentFenceInfoEXT fenceInfo = { VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT };
+    fenceInfo.swapchainCount = 1;
+    fenceInfo.pFences       = &currSync.fence;
 
     VkSwapchainPresentModeInfoEXT modeInfo = { VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT };
     modeInfo.swapchainCount = 1;
@@ -80,7 +87,7 @@ namespace dxvk {
 
     VkPresentInfoKHR info = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
     info.waitSemaphoreCount = 1;
-    info.pWaitSemaphores    = &sync.present;
+    info.pWaitSemaphores    = &currSync.present;
     info.swapchainCount     = 1;
     info.pSwapchains        = &m_swapchain;
     info.pImageIndices      = &m_imageIndex;
@@ -88,11 +95,16 @@ namespace dxvk {
     if (m_device->features().khrPresentId.presentId && frameId)
       presentId.pNext = const_cast<void*>(std::exchange(info.pNext, &presentId));
 
-    if (m_device->features().extSwapchainMaintenance1.swapchainMaintenance1)
+    if (m_device->features().extSwapchainMaintenance1.swapchainMaintenance1) {
       modeInfo.pNext = const_cast<void*>(std::exchange(info.pNext, &modeInfo));
+      fenceInfo.pNext = const_cast<void*>(std::exchange(info.pNext, &fenceInfo));
+    }
 
     VkResult status = m_vkd->vkQueuePresentKHR(
       m_device->queues().graphics.queueHandle, &info);
+
+    if (m_device->features().extSwapchainMaintenance1.swapchainMaintenance1)
+      currSync.fenceSignaled = status >= 0;
 
     if (status != VK_SUCCESS && status != VK_SUBOPTIMAL_KHR)
       return status;
@@ -102,11 +114,12 @@ namespace dxvk {
     m_frameIndex += 1;
     m_frameIndex %= m_semaphores.size();
 
-    sync = m_semaphores.at(m_frameIndex);
+    PresenterSync& nextSync = m_semaphores.at(m_frameIndex);
+    waitForSwapchainFence(nextSync);
 
     m_acquireStatus = m_vkd->vkAcquireNextImageKHR(m_vkd->device(),
       m_swapchain, std::numeric_limits<uint64_t>::max(),
-      sync.acquire, VK_NULL_HANDLE, &m_imageIndex);
+      nextSync.acquire, VK_NULL_HANDLE, &m_imageIndex);
 
     return status;
   }
@@ -158,7 +171,7 @@ namespace dxvk {
       return VK_ERROR_SURFACE_LOST_KHR;
 
     VkSurfaceFullScreenExclusiveInfoEXT fullScreenExclusiveInfo = { VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_INFO_EXT };
-    fullScreenExclusiveInfo.fullScreenExclusive = desc.fullScreenExclusive;
+    fullScreenExclusiveInfo.fullScreenExclusive = VK_FULL_SCREEN_EXCLUSIVE_DISALLOWED_EXT;
 
     VkPhysicalDeviceSurfaceInfo2KHR surfaceInfo = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR };
     surfaceInfo.surface = m_surface;
@@ -198,13 +211,13 @@ namespace dxvk {
     }
 
     // Select format based on swap chain properties
-    if ((status = getSupportedFormats(formats, desc.fullScreenExclusive)))
+    if ((status = getSupportedFormats(formats)))
       return status;
 
     m_info.format = pickFormat(formats.size(), formats.data(), desc.numFormats, desc.formats);
 
     // Select a present mode for the current sync interval
-    if ((status = getSupportedPresentModes(modes, desc.fullScreenExclusive)))
+    if ((status = getSupportedPresentModes(modes)))
       return status;
 
     m_info.presentMode = pickPresentMode(modes.size(), modes.data(), m_info.syncInterval);
@@ -287,7 +300,7 @@ namespace dxvk {
     m_info.imageCount = pickImageCount(minImageCount, maxImageCount, desc.imageCount);
 
     VkSurfaceFullScreenExclusiveInfoEXT fullScreenInfo = { VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_INFO_EXT };
-    fullScreenInfo.fullScreenExclusive = desc.fullScreenExclusive;
+    fullScreenInfo.fullScreenExclusive = VK_FULL_SCREEN_EXCLUSIVE_DISALLOWED_EXT;
 
     VkSwapchainPresentModesCreateInfoEXT modeInfo = { VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT };
     modeInfo.presentModeCount       = compatibleModes.size();
@@ -320,8 +333,7 @@ namespace dxvk {
       "\n  Color space:  ", m_info.format.colorSpace,
       "\n  Present mode: ", m_info.presentMode, " (dynamic: ", (dynamicModes.empty() ? "no)" : "yes)"),
       "\n  Buffer size:  ", m_info.imageExtent.width, "x", m_info.imageExtent.height,
-      "\n  Image count:  ", m_info.imageCount,
-      "\n  Exclusive FS: ", desc.fullScreenExclusive));
+      "\n  Image count:  ", m_info.imageCount));
     
     if ((status = m_vkd->vkCreateSwapchainKHR(m_vkd->device(),
         &swapInfo, nullptr, &m_swapchain)))
@@ -356,10 +368,19 @@ namespace dxvk {
         return status;
     }
 
-    // Create one set of semaphores per swap image
-    m_semaphores.resize(m_info.imageCount);
+    // Create one set of semaphores per swap image, as well as a fence
+    // that we use to ensure that semaphores are safe to access.
+    uint32_t semaphoreCount = m_info.imageCount;
 
-    for (uint32_t i = 0; i < m_semaphores.size(); i++) {
+    if (!m_device->features().extSwapchainMaintenance1.swapchainMaintenance1) {
+      // Without support for present fences, just give up and allocate extra
+      // semaphores. We have no real guarantees when they are safe to access.
+      semaphoreCount *= 2u;
+    }
+
+    m_semaphores.resize(semaphoreCount);
+
+    for (uint32_t i = 0; i < semaphoreCount; i++) {
       VkSemaphoreCreateInfo semInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 
       if ((status = m_vkd->vkCreateSemaphore(m_vkd->device(),
@@ -368,6 +389,12 @@ namespace dxvk {
 
       if ((status = m_vkd->vkCreateSemaphore(m_vkd->device(),
           &semInfo, nullptr, &m_semaphores[i].present)))
+        return status;
+
+      VkFenceCreateInfo fenceInfo = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+
+      if ((status = m_vkd->vkCreateFence(m_vkd->device(),
+          &fenceInfo, nullptr, &m_semaphores[i].fence)))
         return status;
     }
     
@@ -386,7 +413,7 @@ namespace dxvk {
       return false;
 
     std::vector<VkSurfaceFormatKHR> surfaceFormats;
-    getSupportedFormats(surfaceFormats, VK_FULL_SCREEN_EXCLUSIVE_DEFAULT_EXT);
+    getSupportedFormats(surfaceFormats);
 
     for (const auto& surfaceFormat : surfaceFormats) {
       if (surfaceFormat.colorSpace == colorspace)
@@ -426,11 +453,11 @@ namespace dxvk {
   }
 
 
-  VkResult Presenter::getSupportedFormats(std::vector<VkSurfaceFormatKHR>& formats, VkFullScreenExclusiveEXT fullScreenExclusive) const {
+  VkResult Presenter::getSupportedFormats(std::vector<VkSurfaceFormatKHR>& formats) const {
     uint32_t numFormats = 0;
 
     VkSurfaceFullScreenExclusiveInfoEXT fullScreenInfo = { VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_INFO_EXT };
-    fullScreenInfo.fullScreenExclusive = fullScreenExclusive;
+    fullScreenInfo.fullScreenExclusive = VK_FULL_SCREEN_EXCLUSIVE_DISALLOWED_EXT;
 
     VkPhysicalDeviceSurfaceInfo2KHR surfaceInfo = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR, &fullScreenInfo };
     surfaceInfo.surface = m_surface;
@@ -468,11 +495,11 @@ namespace dxvk {
   }
 
   
-  VkResult Presenter::getSupportedPresentModes(std::vector<VkPresentModeKHR>& modes, VkFullScreenExclusiveEXT fullScreenExclusive) const {
+  VkResult Presenter::getSupportedPresentModes(std::vector<VkPresentModeKHR>& modes) const {
     uint32_t numModes = 0;
 
     VkSurfaceFullScreenExclusiveInfoEXT fullScreenInfo = { VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_INFO_EXT };
-    fullScreenInfo.fullScreenExclusive = fullScreenExclusive;
+    fullScreenInfo.fullScreenExclusive = VK_FULL_SCREEN_EXCLUSIVE_DISALLOWED_EXT;
 
     VkPhysicalDeviceSurfaceInfo2KHR surfaceInfo = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR, &fullScreenInfo };
     surfaceInfo.surface = m_surface;
@@ -623,12 +650,16 @@ namespace dxvk {
     if (m_signal != nullptr)
       m_signal->wait(m_lastFrameId.load(std::memory_order_acquire));
 
+    for (auto& sem : m_semaphores)
+      waitForSwapchainFence(sem);
+
     for (const auto& img : m_images)
       m_vkd->vkDestroyImageView(m_vkd->device(), img.view, nullptr);
     
     for (const auto& sem : m_semaphores) {
       m_vkd->vkDestroySemaphore(m_vkd->device(), sem.acquire, nullptr);
       m_vkd->vkDestroySemaphore(m_vkd->device(), sem.present, nullptr);
+      m_vkd->vkDestroyFence(m_vkd->device(), sem.fence, nullptr);
     }
 
     m_vkd->vkDestroySwapchainKHR(m_vkd->device(), m_swapchain, nullptr);
@@ -645,6 +676,24 @@ namespace dxvk {
     m_vki->vkDestroySurfaceKHR(m_vki->instance(), m_surface, nullptr);
 
     m_surface = VK_NULL_HANDLE;
+  }
+
+
+  void Presenter::waitForSwapchainFence(
+          PresenterSync&            sync) {
+    if (!sync.fenceSignaled)
+      return;
+
+    VkResult vr = m_vkd->vkWaitForFences(m_vkd->device(),
+      1, &sync.fence, VK_TRUE, ~0ull);
+
+    if (vr)
+      Logger::err(str::format("Failed to wait for WSI fence: ", vr));
+
+    if ((vr = m_vkd->vkResetFences(m_vkd->device(), 1, &sync.fence)))
+      Logger::err(str::format("Failed to reset WSI fence: ", vr));
+
+    sync.fenceSignaled = VK_FALSE;
   }
 
 
