@@ -310,12 +310,6 @@ namespace dxvk {
       config = findProfile(g_profiles, appName);
 
     if (config) {
-      // Inform the user that we loaded a default config
-      Logger::info(str::format("Found built-in config:"));
-
-      for (auto& pair : config->m_options)
-        Logger::info(str::format("  ", pair.first, " = ", pair.second));
-
       return *config;
     }
 
@@ -372,10 +366,7 @@ namespace dxvk {
 
   void Config::logOptions() const {
     if (!m_options.empty()) {
-      Logger::info("Effective configuration:");
-
-      for (auto& pair : m_options)
-        Logger::info(str::format("  ", pair.first, " = ", pair.second));
+      Logger::info("效果已经加载!");
     }
   }
 
