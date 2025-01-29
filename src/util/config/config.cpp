@@ -20,6 +20,7 @@ namespace dxvk {
     /* 幻想全明星专用 修复黑屏                 */
     { R"(\\ACClient\.exe$)", {{
 	  { "d3d9.maxFrameRate",        "300" },
+	  { "d3d9.countLosableResources",        "False" },
     }} },
     /* Rayman 3: Hoodlum Havoc                    *
      * Missing geometry and textures without      *
